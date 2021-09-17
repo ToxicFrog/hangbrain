@@ -16,10 +16,10 @@
     :validate [#(< 0 % 0x10000) "Must be a number between 0 and 65536"]]
    ["-p" "--profile PROFILE_DIR"
     "Browser profile directory. Must already be signed in to Chat!"
-    :default (str (get (System/getenv) "HOME") "/.config/hangbrain-chrome")]
+    :default (str (get (System/getenv) "HOME") "/.config/hangbrain")]
    ["-b" "--browser BROWSER_PATH"
     "Path to Chrome or Chromium"
-    :default "chromium"]
+    :default "/usr/bin/chromium"]
    ["-h" "--help" "This text"]])
 
 (defn parse-opts [argv]
@@ -45,50 +45,14 @@
    :name s/Str
    })
 
-; (defn el->Channel :- Channel
-;   [ctx iframe el]
-;   {:type :dm
-;    :id [iframe el]
-;    :name (get-element-text-el ctx el)
-;    })
-
-; (defschema TagId s/Str)
-
-(defn el->id
+(defn el->selector
   [ctx el]
   (println "getting id for element" el)
-  (wd/get-element-attr-el ctx el :id))
-
-; (defn list-chats-in-iframe :- [Channel]
-;   [ctx iframe]
-;   (println "Getting chats in iframe" iframe)
-;   (switch-frame* ctx (el->ref iframe))
-;   (let [chats (map (partial el->Channel ctx iframe)
-;                 (query-all ctx "span[role=listitem]"))]
-;     (println "got channels:" chats)
-;     (switch-frame-top ctx)
-;     chats))
-  ; ; returns only the first
-  ; (let [chats (get-element-text ctx "span[role=listitem]")]
-  ;   (println "got chats with internal element ids" chats)
-  ;   (switch-frame-top ctx)
-  ;   chats))
-
-; (def ^:dynamic *browser* nil)
-
-; (defn chat-info [ctx chat]
-;   chat)
-  ; (println "getting chat info for" chat)
-  ; (let [text (get-element-text-el ctx (el->ref chat))]
-  ;   (println " -> " text)
-  ;   text))
-
-; (defn ad-hoc-channel-name
-;   [ctx id users]
-;   (->> users
-;     (map #(wd/get-element-attr-el ctx % :data-name))
-;     (apply str)
-;     ))
+  (str
+    "#"
+    (string/replace
+       (wd/get-element-attr-el ctx el :id)
+       "/" "\\/")))
 
 (defn maybe-get-attr
   [ctx root tag attr]
@@ -101,6 +65,18 @@
   (println "ad hoc channel name" id)
   (wd/get-element-attr ctx [id "span[role=presentation][title]"] :title))
 
+(defmacro with-frame-el
+  [ctx frame & body]
+  `(try+
+     (wd/switch-frame* ~ctx (wd/el->ref ~frame))
+     ~@body
+     (finally (wd/switch-frame-parent ~ctx))))
+
+(defn select-channel
+  [ctx [iframe el]]
+  (with-frame-el ctx iframe
+    (wd/click-el ctx el)))
+
 ; for DMs, inside the el, we're going to have a <span> with
 ;  data-hovercard-id=<email>
 ;  data-name=<human-readable name>
@@ -108,60 +84,57 @@
 ; for ad hoc rooms there are going to be *multiple* spans with those elements,
 ; one per user in the room
 ; for channels, there's going to be a <span> with role=presentation title=<channel name>
-(defn id->UserChannel
-  [ctx id]
-  (let [id (string/replace (str "#" id) "/" "\\/")
+(defn el->UserChannel
+  [ctx iframe el]
+  (let [id (el->selector ctx el)
         _ (println "UserChannel" id)
         users (wd/query-all ctx [id "span[data-member-id]"])
         _ (println "got user list")
         timestamp (maybe-get-attr ctx id :span :data-absolute-timestamp)
         _ (println "got timestamp")]
-    (println "userchannel" id timestamp (count users) users)
     (cond
       (empty? users) nil
       (= 1 (count users)) ; DM
-      {:id id
+      {:id [iframe el]
        :name (wd/get-element-attr ctx [id "span[data-member-id]"] :data-name)
        :timestamp timestamp
        :type :dm}
       :else ; ad hoc channel
-      {:id id
+      {:id [iframe el]
        :name (ad-hoc-channel-name ctx id)
        :timestamp timestamp
        :type :channel}
       )))
 
+(defn el->RoomChannel
+  [ctx iframe el]
+  (let [id (el->selector ctx el)
+        timestamp (maybe-get-attr ctx id :span :data-absolute-timestamp)
+        _ (println "got timestamp" timestamp)]
+    {:id [iframe el]
+     :name (ad-hoc-channel-name ctx id)
+     :timestamp timestamp
+     :type :channel}))
+
 (defn list-dms [ctx iframe]
   (println "Getting chats in iframe" iframe)
-  (wd/switch-frame* ctx (wd/el->ref iframe))
-  (try+
-    (println "switched to frame")
+  (with-frame-el ctx iframe
     (->> (wd/query-all ctx "span[role=listitem]")
-         (map (partial el->id ctx))
-         (map (partial id->UserChannel ctx))
-         doall)
-    (finally
-      (println "switched out")
-      (wd/switch-frame-top ctx))))
+         (map (partial el->UserChannel ctx iframe))
+         doall)))
 
-;   (let [chat-buttons (query-all ctx "span[role=listitem]")]
-;     )
-;   (let [chats (map (partial el->Channel ctx iframe)
-;                 (query-all ctx "span[role=listitem]"))]
-;     (println "got channels:" chats)
-;     (switch-frame-top ctx)
-;     chats))
-
-(defn list-channels [ctx iframe] [])
+(defn list-rooms [ctx iframe]
+  (println "Getting rooms in iframe" iframe)
+  (with-frame-el ctx iframe
+    (->> (wd/query-all ctx "span[role=listitem]")
+         (map (partial el->RoomChannel ctx iframe))
+         doall)))
 
 (defn list-chats [ctx]
   (let [[dm-iframe channel-iframe] (wd/query-all ctx "div[role=navigation] iframe")]
     (concat
       (list-dms ctx dm-iframe)
-      (list-channels ctx channel-iframe))))
-  ; (as-> (query-all ctx "div[role=navigation] iframe") $
-  ;       (mapcat (partial list-chats-in-iframe ctx) $)
-  ;       (map (partial chat-info ctx) $)))
+      (list-rooms ctx channel-iframe))))
 
 (defn init-browser! [ctx]
   (doto ctx
@@ -175,6 +148,19 @@
      :path-browser (opts :browser)
      :locator "css selector"}))
 
+; IRC interface
+; LIST returns a list of IRC-compatible channel name and user count pairs
+(defn LIST [] nil)
+; NAMES [channel] returns a list of users on the channel
+; this is going to be hard because it involves clicking the channel menu, then
+; "list members", then parsing the result of that, then dismissing the modal
+(defn NAMES [] nil)
+; WHO lists all users reachable by DM
+; it returns nick, user, host, server, and real name (among other things),
+; which we should probably map to: munged name, @ prefix, @ suffix, "hangouts",
+; and display name
+(defn WHO [] nil)
+
 (defn -main
   [& argv]
   (let [opts (parse-opts argv)
@@ -182,7 +168,7 @@
     (println "OPTS" opts)
     (try+
       (init-browser! ctx)
-      (list-chats ctx)
+      (doall (map println (list-chats ctx)))
       (finally (wd/quit ctx)))))
   ; (let []
   ;   (with-chrome [ctx {;:profile (opts :profile)
