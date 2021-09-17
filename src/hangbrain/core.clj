@@ -2,6 +2,7 @@
   (:gen-class)
   (:require
     [etaoin.api :as wd]
+    [etaoin.keys :as keys]
     ; [etaoin.api2 :as wd2 :refer [with-chrome]]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [slingshot.slingshot :refer [try+]]
@@ -72,11 +73,27 @@
      ~@body
      (finally (wd/switch-frame-parent ~ctx))))
 
+(defmacro with-frame-n
+  [ctx frame & body]
+  `(try+
+     (wd/switch-frame* ~ctx ~frame)
+     ~@body
+     (finally (wd/switch-frame-parent ~ctx))))
+
 (defn select-channel
   [ctx [iframe el]]
   (with-frame-el ctx iframe
     (wd/click-el ctx el)))
 
+(defn send-message
+  [ctx msg]
+  (with-frame-n ctx 5
+   (wd/fill ctx "div[spellcheck]" msg)
+   (wd/fill ctx "div[spellcheck]" keys/enter)
+  ))
+
+; if we innerText a DM, the first line is going to be "Active", "Away", etc
+; if there are unread messages, the second line will be "Unread"
 ; for DMs, inside the el, we're going to have a <span> with
 ;  data-hovercard-id=<email>
 ;  data-name=<human-readable name>
