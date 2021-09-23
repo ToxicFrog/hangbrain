@@ -1,14 +1,25 @@
+(require 'clojure.spec.alpha 'expound.alpha 'io.aviso.repl)
+(io.aviso.repl/install-pretty-exceptions)
+
 (ns hangbrain.core
   (:gen-class)
+  (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [etaoin.api :as wd]
+    [io.aviso.repl]
+    [io.aviso.logging]
     [etaoin.keys :as keys]
+    [clojure.tools.logging :as log]
     ; [etaoin.api2 :as wd2 :refer [with-chrome]]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
-    [slingshot.slingshot :refer [try+]]
     [clojure.tools.cli :as cli]
     [clojure.string :as string]
+    [hangbrain.zeiat :as zeiat]
     ))
+
+(io.aviso.repl/install-pretty-exceptions)
+(io.aviso.logging/install-pretty-logging)
+(io.aviso.logging/install-uncaught-exception-handler)
 
 (def flags
   [["-l" "--listen-port PORT" "Port to listen for IRC connections on"
@@ -27,11 +38,11 @@
   (let [{:keys [options _argv errors summary]} (cli/parse-opts argv flags)]
     (cond
       (:help options) (do
-                        (println summary)
+                        (log/info summary)
                         (System/exit 0))
       errors (do
-               (binding [*out* *err*] (dorun (map println errors))
-               (println summary)
+               (binding [*out* *err*] (dorun (map #(log/error %) errors))
+               (log/trace summary)
                (System/exit 1))))
     options))
 
@@ -48,7 +59,7 @@
 
 (defn el->selector
   [ctx el]
-  (println "getting id for element" el)
+  (log/trace "getting id for element" el)
   (str
     "#"
     (string/replace
@@ -57,25 +68,25 @@
 
 (defn maybe-get-attr
   [ctx root tag attr]
-  (try+
+  (try
     (wd/get-element-attr ctx [root (str (name tag) "[" (name attr) "]")] attr)
     (catch Object _ nil)))
 
 (defn ad-hoc-channel-name
   [ctx id]
-  (println "ad hoc channel name" id)
+  (log/trace "ad hoc channel name" id)
   (wd/get-element-attr ctx [id "span[role=presentation][title]"] :title))
 
 (defmacro with-frame-el
   [ctx frame & body]
-  `(try+
+  `(try
      (wd/switch-frame* ~ctx (wd/el->ref ~frame))
      ~@body
      (finally (wd/switch-frame-parent ~ctx))))
 
 (defmacro with-frame-n
   [ctx frame & body]
-  `(try+
+  `(try
      (wd/switch-frame* ~ctx ~frame)
      ~@body
      (finally (wd/switch-frame-parent ~ctx))))
@@ -104,11 +115,11 @@
 (defn el->UserChannel
   [ctx iframe el]
   (let [id (el->selector ctx el)
-        _ (println "UserChannel" id)
+        _ (log/trace "UserChannel" id)
         users (wd/query-all ctx [id "span[data-member-id]"])
-        _ (println "got user list")
+        _ (log/trace "got user list")
         timestamp (maybe-get-attr ctx id :span :data-absolute-timestamp)
-        _ (println "got timestamp")]
+        _ (log/trace "got timestamp")]
     (cond
       (empty? users) nil
       (= 1 (count users)) ; DM
@@ -127,21 +138,21 @@
   [ctx iframe el]
   (let [id (el->selector ctx el)
         timestamp (maybe-get-attr ctx id :span :data-absolute-timestamp)
-        _ (println "got timestamp" timestamp)]
+        _ (log/trace "got timestamp" timestamp)]
     {:id [iframe el]
      :name (ad-hoc-channel-name ctx id)
      :timestamp timestamp
      :type :channel}))
 
 (defn list-dms [ctx iframe]
-  (println "Getting chats in iframe" iframe)
+  (log/trace "Getting chats in iframe" iframe)
   (with-frame-el ctx iframe
     (->> (wd/query-all ctx "span[role=listitem]")
          (map (partial el->UserChannel ctx iframe))
          doall)))
 
 (defn list-rooms [ctx iframe]
-  (println "Getting rooms in iframe" iframe)
+  (log/trace "Getting rooms in iframe" iframe)
   (with-frame-el ctx iframe
     (->> (wd/query-all ctx "span[role=listitem]")
          (map (partial el->RoomChannel ctx iframe))
@@ -178,18 +189,34 @@
 ; and display name
 (defn WHO [] nil)
 
+(def config
+  (->> [:connect :disconnect :list-channels :list-users :list-members :list-unread :read-messages :write-message]
+       (map (fn [x] [x #(log/trace x %&)]))
+       (into {})))
+
+(log/trace "compiling main")
 (defn -main
+  [& argv]
+  (s/set-fn-validation! true)
+  (io.aviso.repl/install-pretty-exceptions)
+  (io.aviso.logging/install-pretty-logging)
+  (io.aviso.logging/install-uncaught-exception-handler)
+  (log/trace "running main")
+  (let [opts (parse-opts argv)]
+    (zeiat/run (opts :listen-port) config)))
+
+(defn -main-old
   [& argv]
   (let [opts (parse-opts argv)
         ctx (create-browser opts)]
-    (println "OPTS" opts)
-    (try+
+    (log/trace "OPTS" opts)
+    (try
       (init-browser! ctx)
-      (doall (map println (list-chats ctx)))
+      (doall (map #(log/trace %&) (list-chats ctx)))
       (finally (wd/quit ctx)))))
   ; (let []
   ;   (with-chrome [ctx {;:profile (opts :profile)
-  ;     (println "OPTIONS" opts)
-  ;     (println "WEBDRIVER" ctx)
+  ;     (log/trace "OPTIONS" opts)
+  ;     (log/trace "WEBDRIVER" ctx)
   ;     (init-browser! ctx)
-  ;     (println (list-chats ctx)))))
+  ;     (log/trace (list-chats ctx)))))
