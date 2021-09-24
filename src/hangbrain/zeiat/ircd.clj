@@ -9,5 +9,31 @@
     ))
 
 (intern *ns* 'dispatch-message ircd-core/dispatch-message)
-; (println ircd-core/dispatch-message)
-; (println dispatch-message)
+
+(defn- extract-prefix
+  [message]
+  (if (= \: (first message))
+    ; prefix -- split into prefix and tail, drop : from prefix
+    (update (string/split message #" " 2)
+      0 string/replace-first ":" "")
+    ; no prefix
+    [nil message]))
+
+(defn- next-message-field
+  [message]
+  (if (= \: (first message))
+    ; field starts with :, all the rest of the message is the field
+    [(string/replace-first message ":" "") nil]
+    ; no leading :, eat the field up to the next space
+    (string/split message #" " 2)))
+
+(defn parse-line
+  "Parse an IRC message into a prefix, command, and args."
+  [message]
+  (println "parse message" message)
+  (let [[_prefix message] (extract-prefix message)]
+    (loop [message message fields []]
+      (if (nil? message)
+        fields
+        (let [[field message] (next-message-field message)]
+          (recur message (conj fields field)))))))

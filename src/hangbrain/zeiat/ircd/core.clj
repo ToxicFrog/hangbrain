@@ -18,7 +18,7 @@
     " "
     (concat
       (butlast fields)
-      (str ":" (last fields)))))
+      [(str ":" (last fields))])))
 
 (defn reply
   [& fields]
