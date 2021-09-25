@@ -15,6 +15,7 @@
     [clojure.tools.cli :as cli]
     [clojure.string :as string]
     [hangbrain.zeiat :as zeiat]
+    [hangbrain.zeiat.stub-backend :as stub]
     ))
 
 (io.aviso.repl/install-pretty-exceptions)
@@ -176,23 +177,10 @@
      :path-browser (opts :browser)
      :locator "css selector"}))
 
-; IRC interface
-; LIST returns a list of IRC-compatible channel name and user count pairs
-(defn LIST [] nil)
-; NAMES [channel] returns a list of users on the channel
-; this is going to be hard because it involves clicking the channel menu, then
-; "list members", then parsing the result of that, then dismissing the modal
-(defn NAMES [] nil)
-; WHO lists all users reachable by DM
-; it returns nick, user, host, server, and real name (among other things),
-; which we should probably map to: munged name, @ prefix, @ suffix, "hangouts",
-; and display name
-(defn WHO [] nil)
-
-(def config
-  (->> [:connect :disconnect :list-channels :list-users :list-members :list-unread :read-messages :write-message]
-       (map (fn [x] [x #(log/trace x %&)]))
-       (into {})))
+; (def config
+;   (->> [:connect :disconnect :list-channels :list-users :list-members :list-unread :read-messages :write-message]
+;        (map (fn [x] [x #(log/trace x %&)]))
+;        (into {})))
 
 (log/trace "compiling main")
 (defn -main
@@ -201,9 +189,12 @@
   (io.aviso.repl/install-pretty-exceptions)
   (io.aviso.logging/install-pretty-logging)
   (io.aviso.logging/install-uncaught-exception-handler)
+  (System/setProperty
+    "java.util.logging.SimpleFormatter.format"
+    "[%4$3.3s %1$tF %1$tT] %3$s: %5$s%6$s%n")
   (log/trace "running main")
   (let [opts (parse-opts argv)]
-    (zeiat/run (opts :listen-port) config)))
+    (zeiat/run (opts :listen-port) (stub/make-stub))))
 
 (defn -main-old
   [& argv]

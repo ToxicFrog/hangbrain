@@ -7,7 +7,7 @@
     [clojure.string :as string]
     [hangbrain.zeiat.translator :as translator]
     [hangbrain.zeiat.ircd :as ircd]
-    [hangbrain.zeiat.types :refer [TranslatorAgent BackendConfiguration]]
+    [hangbrain.zeiat.types :refer [TranslatorAgent TranslatorState ZeiatBackend]]
     [clojure.java.io :as io]
     )
   (:import
@@ -43,19 +43,11 @@
           (shutdown-agents)
           (System/exit 1))))))
 
-(defn- initialize-translator
-  [state agent]
-  ; Once we're done here it'll install the validator and then initialize the backend.
-  (send agent translator/startup!)
-  (assoc state
-    :reader (make-reader (:socket state) agent)))
-
 (defn create :- TranslatorAgent
   "Create a translator agent with its state initialized to the client socket and backend config."
-  [socket config]
+  [socket :- Socket, backend :- (s/protocol ZeiatBackend)]
   (let [agent (agent {:socket socket
-                      :config config
-                      :backend nil
+                      :backend backend
                       :writer (-> socket io/writer (PrintWriter. true))}
                 ; We do not install the validator here because we can't create the :reader field
                 ; until after the agent has been created; so instead we partially create the agent
@@ -63,12 +55,16 @@
                 ; the validator.
                 :error-mode :fail
                 :error-handler handle-agent-error)]
-   (log/trace "Creating translator agent:", agent)
-   (send agent initialize-translator agent)))
+    (log/trace "Creating translator agent:", agent)
+    (send agent assoc :reader (make-reader socket agent))
+    (send agent (fn [state]
+                  (set-validator! agent (s/validator TranslatorState))
+                  state))
+    (send agent translator/startup!)))
 
 (defn run :- [TranslatorAgent]
   "Open a listen socket and loop accepting clients from it and creating a new Zeiat instance for each client. Continues until the socket is closed, then returns a seq of all still-connected clients."
-  [listen-port :- s/Int, config :- BackendConfiguration]
+  [listen-port :- s/Int, backend :- (s/protocol ZeiatBackend)]
   (let [sock (ServerSocket. listen-port)]
     (log/info "Listening for connections on port" listen-port)
     (loop [clients []]
@@ -76,7 +72,7 @@
         (recur
           ; TODO: once we can detect dead clients, we should filter them from the list here
           ; so they don't endlessly pile up.
-          (conj clients (create (.accept sock) config)))
+          (conj clients (create (.accept sock) backend)))
         clients))))
 
 (defn running? :- s/Bool

@@ -13,6 +13,7 @@
   :main ^:skip-aot hangbrain.core
   :target-path "target/%s"
   :middleware [io.aviso.lein-pretty/inject]
+  :jvm-opts ["-Dclojure.tools.logging.factory=clojure.tools.logging.impl/jul-factory"]
   :plugins [
             [io.aviso/pretty "1.1"]
             ]

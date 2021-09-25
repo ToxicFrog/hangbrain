@@ -13,7 +13,6 @@
 
 (defn startup! :- TranslatorState
   [state :- TranslatorState]
-  (set-validator! *agent* (s/validator TranslatorState))
   (assoc state :backend (call state :connect)))
 
 (defn shutdown! :- TranslatorState
