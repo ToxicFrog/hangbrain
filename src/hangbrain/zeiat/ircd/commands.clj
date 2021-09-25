@@ -3,57 +3,66 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [hangbrain.zeiat.ircd.core :as ircd :refer [message *state* reply]]
+    [hangbrain.zeiat.translator :as translator]
+    [hangbrain.zeiat.types :refer [TranslatorState]]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [clojure.string :as string]
     ))
 
-(defn check-registration [state]
-  state)
+;;; Client Management
 
-(println "registering message handlers" message)
+(defn- registered?
+  "True if the client connection is fully registered."
+  [state]
+  (and (:nick state) (:uname state)))
 
-;;; User Management
+(defn- check-registration [state]
+  (if (registered? state)
+    (do
+      (reply 1 "*" "Welcome to the Zeiat IRC relay.")
+      (reply 376 "*" "End of MOTD."))
+    state))
 
-(defmethod message :NICK
+(defmethod message :NICK :- TranslatorState
   [_ nick]
-  ; TODO reject this if the user is already signed in
-  (cond
-    ; Reject if the user is already logged in
-    (*state* :nick)
-    (reply 437 nick ":Unavailable")
-    :else
+  (if (registered? *state*)
+    ; User already logged in, don't allow name changes post hoc
+    (reply 484 "*" "NICK command restricted")
+    ; Otherwise add it to the state
     (-> *state*
         (assoc :nick nick)
         (check-registration))))
 
-(defmethod message :USER
+(defmethod message :USER :- TranslatorState
   [_ uname _mode _unused rname]
-  (-> *state*
-      (assoc :uname uname)
-      (assoc :rname rname)
-      (check-registration)))
+  (if (registered? *state*)
+    (reply 462 "*" "Connection already registered.")
+    (-> *state*
+        (assoc :uname uname)
+        (assoc :rname rname)
+        (check-registration))))
 
-; (defmethod message :PASS
-;   [_ pass]
-;   (if (or (nil? (*state* :pass))
-;         (= (*state* :pass) pass))
-;     (-> *state* (dissoc :pass) (check-registration))
-;     )
+(defmethod message :PASS :- TranslatorState
+  ; Password support. Not currently implemented.
+  [_ _pass]
+  *state*)
 
-(defmethod message :CAP
+(defmethod message :CAP :- TranslatorState
+  ; Capability negotiation. Currently we don't support this, which means we should just ignore it.
+  ; TODO: implement timestamp and msgid capabilities
   [_ & rest]
-  ; TODO: implement capability negotiation
-  ; we want timestamp and msgid at minimum
-  )
+  *state*)
 
-(defmethod message :PING
+(defmethod message :PING :- TranslatorState
   [_ ping]
-  (reply :pong "Zeiat" ping))
+  (reply "PONG" "Zeiat" ping))
 
-(defmethod message :QUIT
-  [_ message]
-  ; disconnect user and shut down thread
-  )
+(defmethod message :QUIT :- TranslatorState
+  [_ _message]
+  ; this is annoying because we need a way to send to the agent, but this
+  ; introduces a circular dependency on zeiat.translator
+  ; perhaps we need another library, zeiat.translator.api or such
+  (translator/shutdown!))
 
 ;;; Channel Management
 
@@ -85,4 +94,17 @@
 (defmethod message :PRIVMSG
   [_ channel msg]
   ; TODO: make sure to handle CTCP properly!
+  *state*)
+
+;;; Zeiat extensions
+
+(defmethod message :RECAP
+  [_ & channels]
+  ; Replay chat for the named channels/users
+  *state*)
+
+(defmethod message :AUTOJOIN
+  [_ onoff]
+  ; if ON, automatically JOIN the user to channels with unread chatter
+  ; if OFF, don't (i.e. behave like a normal IRC server)
   *state*)

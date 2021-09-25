@@ -3,11 +3,7 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
-    )
-  ; (:import
-  ;   [java.net Socket]
-  ;   [java.io Writer])
-    )
+    ))
 
 (defschema BackendState s/Any)
 
@@ -51,5 +47,5 @@
 
 (defschema TranslatorAgent
   ; No validation for the agent interior as yet, but TranslatorState is installed as a validator when the agent is created, which should help.
+  ; TODO: proper agent validation, perhaps by reifying the validator here and then checking that the agent's validator is == the one for TranslatorState
   (s/pred (partial instance? clojure.lang.Agent)))
-
