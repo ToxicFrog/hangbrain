@@ -18,8 +18,13 @@
 (defn- handle-agent-error
   [agent error]
   (log/warn error "Error in agent" agent)
-  (translator/shutdown!))
+  (try
+    (translator/shutdown! @agent)
+    (catch Exception e
+      (log/error e "Error shutting down agent"))
+    (finally (System/exit 2))))
 
+; TODO this throws if the socket is closed, we should catch the throw and terminate gracefully
 (defn- reader-seq [reader]
   (take-while
     some?
@@ -46,7 +51,7 @@
 
 (defn create :- TranslatorAgent
   "Create a translator agent with its state initialized to the client socket and backend config."
-  [socket :- Socket, backend :- (s/protocol ZeiatBackend)]
+  [socket :- Socket, backend :- ZeiatBackend]
   (let [agent (agent {:socket socket
                       :backend backend
                       :nick nil :uname nil :rname nil
@@ -68,7 +73,7 @@
 
 (defn run :- [TranslatorAgent]
   "Open a listen socket and loop accepting clients from it and creating a new Zeiat instance for each client. Continues until the socket is closed, then returns a seq of all still-connected clients."
-  [listen-port :- s/Int, backend :- (s/protocol ZeiatBackend)]
+  [listen-port :- s/Int, backend :- ZeiatBackend]
   (let [sock (ServerSocket. listen-port)]
     (log/info "Listening for connections on port" listen-port)
     (loop [clients []]

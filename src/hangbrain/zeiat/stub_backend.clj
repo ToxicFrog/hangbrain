@@ -4,7 +4,7 @@
   (:require
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [taoensso.timbre :as log]
-    [hangbrain.zeiat.types :refer [TranslatorAgent ZeiatBackend]]
+    [hangbrain.zeiat.backend :refer [ZeiatBackend]]
     ))
 
 (defn make-stub :- (s/protocol ZeiatBackend)
@@ -14,17 +14,21 @@
       (log/trace "stub: connect" this))
     (disconnect [this]
       (log/trace "stub: disconnect" this))
-    (list [this]
+    (listChannels [this]
       (log/trace "stub: list" this)
       [])
-    (list-unread [this]
+    (statChannel [this channel])
+    (listUsers [this]
+      (log/trace "stub: list" this)
+      [])
+    (listUnread [this]
       (log/trace "stub: list-unread" this)
       [])
-    (list-members [this channel]
+    (listMembers [this channel]
       (log/trace "stub: list-members" this channel)
       [])
-    (read-messages [this channel]
+    (readMessages [this channel]
       (log/trace "stub: read-messages" this channel)
       [])
-    (write-message [this channel message]
+    (writeMessage [this channel message]
       (log/trace "stub: write-message" this channel message))))

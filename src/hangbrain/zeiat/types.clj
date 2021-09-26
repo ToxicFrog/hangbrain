@@ -3,30 +3,11 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
+    [hangbrain.zeiat.backend :as backend]
     ))
 
-(defschema BackendState s/Any)
-
-(defschema Chat s/Any)
-
-(defschema Message s/Any)
-
-(defprotocol ZeiatBackend
-  "A protocol that Zeiat uses to communicate with whatever backend you connect to it. Library users should supply something that implements this protocol to zeiat/run."
-  (connect [this]
-    "Connect to the backend. Called when a new user connects to Zeiat.")
-  (disconnect [this]
-    "Disconnect from the backend. Called when a user quits or is otherwise disconnected.")
-  (list [this]
-    "List all available chats. See the Chat schema for the data shape. Called in response to a user's LIST or WHO command.")
-  (list-unread [this]
-    "List all chats with unread messages. Called periodically to monitor for message traffic. Implementations can implement this however they want but note that just blindly returning all chats will result in a lot of unnecessary read-messages calls.")
-  (list-members [this channel]
-    "List all users in a given channel. See FIXME for the data shape. Called in response to NAMES or JOIN.")
-  (read-messages [this channel]
-    "Return all messages from the given channel available in the backscroll. Implementors can limit this to only what's easily available if convenient (e.g. return only history that was autoloaded, not all history). Calling this should mark the chat as read.")
-  (write-message [this channel message]
-    "Send a message to the given channel or user. Calling this should mark the chat as read."))
+(defschema ZeiatBackend
+  (s/protocol backend/ZeiatBackend))
 
 (defschema ClientState
   "A Zeiat client consists of:
@@ -35,7 +16,7 @@
   - a translator agent that handles all message processing and socket writes
   "
   {:socket java.net.Socket
-   :backend (s/protocol ZeiatBackend)
+   :backend ZeiatBackend
    :writer (s/pred (partial instance? java.io.Writer))
    :reader (s/pred future?)
    })

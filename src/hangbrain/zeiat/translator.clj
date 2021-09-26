@@ -19,7 +19,10 @@
   state)
 
 (defn shutdown! :- TranslatorState
-  [state :- TranslatorState]
-  (.close (:socket state))
-  (.disconnect (:backend state))
+  [{:keys [socket writer backend] :as state} :- TranslatorState]
+  (log/info "Shutting down translator:" socket)
+  (when (not (.isClosed socket))
+    (.println writer "QUIT translator shutdown")
+    (.close socket))
+  (.disconnect backend)
   state)
