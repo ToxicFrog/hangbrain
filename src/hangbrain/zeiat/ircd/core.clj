@@ -3,7 +3,7 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require [clojure.pprint :refer [pprint]])
   (:require
-    [clojure.tools.logging :as log]
+    [taoensso.timbre :as log]
     [hangbrain.zeiat.types :refer [TranslatorState TranslatorAgent]]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [io.aviso.exception :refer [write-exception]]
@@ -14,18 +14,28 @@
 (def ^:dynamic *state* nil)
 
 (defn- fields-to-message
-  [command fields]
+  [fields]
   (string/join
     " "
     (concat
-      [":Zeiat"
-       (if (integer? command) (format "%03d" command) command)]
       (butlast fields)
       [(str ":" (last fields))])))
 
 (defn reply
-  [command & fields]
-  (.println (:writer *state*) (fields-to-message command fields))
+  [& fields]
+  (.println (:writer *state*) (fields-to-message fields))
+  *state*)
+
+(defn reply-from
+  [name & fields]
+  (apply reply (str ":" name) fields))
+
+(defn numeric
+  [num & fields]
+  (.println
+    (:writer *state*)
+    (fields-to-message
+      (concat [":Zeiat" (format "%03d" num) (:nick *state* "*")] fields)))
   *state*)
 
 (defn join-channel
@@ -50,7 +60,6 @@
     (try
       (log/trace "dispatching message" command argv)
       (apply message command argv)
-      (log/trace "message dispatched" command argv)
       (catch clojure.lang.ArityException e
         (log/warn e "internal error handling command")
-        (reply 461 "*" command "Wrong number of arguments for command")))))
+        (numeric 461 command "Wrong number of arguments for command")))))

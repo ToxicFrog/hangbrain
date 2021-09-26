@@ -4,18 +4,22 @@
   (:require
     [hangbrain.zeiat.types :refer [TranslatorState TranslatorAgent]]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
-    [clojure.tools.logging.readable :as log]
+    [taoensso.timbre :as log]
     ))
 
-(defn- call
-  [state key & argv]
-  (apply (get-in state [:config key]) argv))
-
 (defn startup! :- TranslatorState
+  "Called when the translator is created. Currently a no-op."
   [state :- TranslatorState]
-  (assoc state :backend (call state :connect)))
+  state)
+
+(defn connect! :- TranslatorState
+  "Called when user registration completes successfully. Should connect to the backend."
+  [state :- TranslatorState]
+  (.connect (:backend state))
+  state)
 
 (defn shutdown! :- TranslatorState
   [state :- TranslatorState]
   (.close (:socket state))
-  (assoc state :backend (call state :disconnect)))
+  (.disconnect (:backend state))
+  state)

@@ -3,7 +3,9 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [hangbrain.zeiat.ircd.core :as ircd-core]
-    [hangbrain.zeiat.ircd.commands]
+    [hangbrain.zeiat.ircd.user]
+    [hangbrain.zeiat.ircd.channels]
+    [taoensso.timbre :as log]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [clojure.string :as string]
     ))
@@ -30,7 +32,7 @@
 (defn parse-line
   "Parse an IRC message into a prefix, command, and args."
   [message]
-  (println "parse message" message)
+  (log/trace "parse message" message)
   (let [[_prefix message] (extract-prefix message)]
     (loop [message message fields []]
       (if (nil? message)

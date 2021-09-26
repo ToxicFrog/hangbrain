@@ -3,7 +3,7 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
-    [clojure.tools.logging.readable :as log]
+    [taoensso.timbre :as log]
     [hangbrain.zeiat.types :refer [TranslatorAgent ZeiatBackend]]
     ))
 

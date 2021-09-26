@@ -3,7 +3,7 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
-    [clojure.tools.logging.readable :as log]
+    [taoensso.timbre :as log]
     [clojure.string :as string]
     [hangbrain.zeiat.translator :as translator]
     [hangbrain.zeiat.ircd :as ircd]
@@ -28,15 +28,16 @@
 (defn ^:private make-reader :- (s/pred future?)
   "Spawn a thread that endlessly reads messages from the socket, parses them, and sends them to the agent. Returns a future that will be realized when the socket is closed."
   [socket :- Socket, agent :- TranslatorAgent]
-  (println "Creating socket reader:", socket)
+  (log/trace "Creating socket reader:", socket)
   (let [reader (-> socket io/reader BufferedReader.)]
     (log/trace "reader created, creating future")
     (future
-      (log/trace "socket reader, here we go!")
+      (log/trace "socket reader thread, here we go!")
       (try
         (doseq [line (reader-seq reader)]
           (apply send agent
             ircd/dispatch-message (ircd/parse-line line)))
+        (log/trace "socket closed, gbye")
         (catch Exception e
           (log/error e)
           (.close socket)
@@ -48,6 +49,9 @@
   [socket :- Socket, backend :- (s/protocol ZeiatBackend)]
   (let [agent (agent {:socket socket
                       :backend backend
+                      :nick nil :uname nil :rname nil
+                      :channels #{}
+                      :autojoin false
                       :writer (-> socket io/writer (PrintWriter. true))}
                 ; We do not install the validator here because we can't create the :reader field
                 ; until after the agent has been created; so instead we partially create the agent
