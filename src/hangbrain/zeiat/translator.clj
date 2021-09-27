@@ -19,10 +19,12 @@
   state)
 
 (defn shutdown! :- TranslatorState
-  [{:keys [socket writer backend] :as state} :- TranslatorState]
-  (log/info "Shutting down translator:" socket)
-  (when (not (.isClosed socket))
-    (.println writer "QUIT translator shutdown")
-    (.close socket))
-  (.disconnect backend)
-  state)
+  ([state]
+   (shutdown! state "(no reason given)"))
+  ([{:keys [socket writer backend] :as state} :- TranslatorState, reason :- s/Str]
+   (log/info "Shutting down translator:" socket "because:" reason)
+   (when (not (.isClosed socket))
+     (.println writer (str ":Zeiat ERROR :" reason))
+     (.close socket))
+   (.disconnect backend)
+  state))
