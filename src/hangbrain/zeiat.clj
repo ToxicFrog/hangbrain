@@ -21,8 +21,8 @@
   (try
     (translator/shutdown! @agent)
     (catch Exception e
-      (log/error e "Error shutting down agent"))
-    (finally (System/exit 2))))
+      (log/error e "Error shutting down agent")
+      (System/exit 2))))
 
 ; TODO this throws if the socket is closed, we should catch the throw and terminate gracefully
 (defn- reader-seq [reader]
@@ -44,10 +44,8 @@
             ircd/dispatch-message (ircd/parse-line line)))
         (log/trace "socket closed, gbye")
         (catch Exception e
-          (log/error e)
-          (.close socket)
-          (shutdown-agents)
-          (System/exit 1))))))
+          (log/error e "Error reading from socket" socket "shutting down this client.")
+          (send agent translator/shutdown!))))))
 
 (defn create :- TranslatorAgent
   "Create a translator agent with its state initialized to the client socket and backend config."
