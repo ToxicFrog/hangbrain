@@ -32,6 +32,9 @@
 
 (defn ad-hoc-channel-name
   [ctx id]
+  ; we should save the id here (or rather, the demangled form of it) as the ID
+  ; for later context switching
+  ; then rather than needing to find the button we just set window.location.hash = "#chat/<id>"
   (log/trace "ad hoc channel name" id)
   (wd/get-element-attr ctx [id "span[role=presentation][title]"] :title))
 
@@ -158,34 +161,58 @@
     (wd/go "https://chat.google.com/")
     (wd/wait-exists "div#talk_roster" {:timeout 30 :interval 1})))
 
-; (defn- cache-key
-;   [chat]
-;   (case (:type chat)
-;     :channel (:name chat)))
+(defn- timestamp [] (quot (System/currentTimeMillis) 1000))
 
-; (defn- update-cache
-;   [cache ctx]
-;   (->> (list-all ctx)
-;        (reduce
-;          (fn [cache chat] (assoc cache ())))
-;   )
+(defn- rebuild-cache [ctx]
+  (reduce
+    (fn [cache chat] (assoc cache (:name chat) chat))
+    {:ts (timestamp)}
+    (list-all ctx)))
+
+(defn rebuild-if-old
+  [cache ctx]
+  (if (> (- (timestamp) (:ts @cache)) (* 60 60))
+    (do
+      (log/trace "Cache ts" (:ts @cache) "older than now of" (timestamp) "- rebuilding")
+      (reset! cache (rebuild-cache ctx)))
+    @cache))
+
+(defn- read-cache
+  ([cache ctx]
+   (vals (rebuild-if-old cache ctx)))
+  ([cache ctx key]
+   (if (contains? @cache key)
+     (@cache key)
+     (do
+       (log/trace "Cache miss on key" key "- rebuilding")
+       (get (reset! cache (rebuild-cache ctx)) key)))))
 
 (defn create :- (s/protocol ZeiatBackend)
   [opts]
-  (let [ctx (atom nil) cache (atom nil)]
+  (let [ctx (atom nil) ; context for the webdriver
+        ; cache mapping IRC channels/nicks to chat information maps
+        ; the cache is updated:
+        ; - whenever a cache miss occurs
+        ; - whenever a request for the entire cache (listUsers/Channels) occurs
+        ;   and the cache contents are more than an hour old
+        cache (atom {:ts 0})]
     (reify ZeiatBackend
       (connect [this]
         (log/info "Connecting to Google Chat...")
         (swap! ctx startup-browser (:browser opts) (:profile opts)))
       (disconnect [this]
-        (log/info "Shutting down Google Chat connection...")
-        (swap! ctx wd/quit))
+        (if @ctx
+          (do
+            (log/info "Shutting down Google Chat connection...")
+            (wd/quit @ctx)
+            (reset! ctx nil))
+          (log/info "Ignoring shutdown request, backend already shut down.")))
       (listChannels [this]
-        (->> (list-all @ctx)
-             (filter #(= :channel (:type %)))))
+        (filter #(= :channel (:type %))
+          (read-cache cache @ctx)))
       (listUsers [this]
-        (->> (list-all @ctx)
-             (filter #(= :dm (:type %)))))
+        (filter #(= :dm (:type %))
+          (read-cache cache @ctx)))
       (listUnread [this]
         (log/trace "stub: list-unread" this)
         [])
@@ -196,5 +223,6 @@
         (log/trace "stub: read-messages" this channel)
         [])
       (writeMessage [this channel message]
-
+        ; (let [chat (read-cache cache @ctx channel)]
+        ;   )
         (log/trace "stub: write-message" this channel message)))))
