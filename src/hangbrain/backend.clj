@@ -15,14 +15,13 @@
     [hangbrain.zeiat.backend :refer [Channel ZeiatBackend]]
     ))
 
-(defn el->selector
+(defn id->selector
+  [id]
+  (str "#" (string/replace id "/" "\\/")))
+
+(defn el->id
   [ctx el]
-  (log/trace "getting id for element" el)
-  (str
-    "#"
-    (string/replace
-       (wd/get-element-attr-el ctx el :id)
-       "/" "\\/")))
+  (wd/get-element-attr-el ctx el :id))
 
 (defn maybe-get-attr
   [ctx root tag attr]
@@ -31,12 +30,11 @@
     (catch Exception _ nil)))
 
 (defn ad-hoc-channel-name
-  [ctx id]
+  [ctx selector]
   ; we should save the id here (or rather, the demangled form of it) as the ID
   ; for later context switching
   ; then rather than needing to find the button we just set window.location.hash = "#chat/<id>"
-  (log/trace "ad hoc channel name" id)
-  (wd/get-element-attr ctx [id "span[role=presentation][title]"] :title))
+  (wd/get-element-attr ctx [selector "span[role=presentation][title]"] :title))
 
 (defmacro with-frame-el
   [ctx frame & body]
@@ -52,17 +50,47 @@
      ~@body
      (finally (wd/switch-frame-parent ~ctx))))
 
-(defn select-channel
-  [ctx [iframe el]]
-  (with-frame-el ctx iframe
-    (wd/click-el ctx el)))
+(defn select-chat
+  [ctx id]
+  (log/trace "selecting chat" id)
+  (let [hash (str "chat/" id)]
+    (when (not= hash (wd/get-hash ctx))
+      (wd/set-hash ctx (str "chat/" id))
+      )))
+      ; (wd/wait ctx 1)
+      ; (run!
+      ;   (fn [frame]
+      ;     (log/trace "iframe visible?" (wd/visible? ctx (wd/el->ref frame)))
+      ;     (with-frame-el ctx frame
+      ;       (log/trace "divs" (wd/query-all ctx "div[spellcheck]"))
+      ;       (if (wd/exists? ctx "div[spellcheck]")
+      ;         (wd/click ctx "div[spellcheck]"))))
+      ;   (wd/query-all ctx "iframe[title=\"Chat content\"]"))
+      ; (wd/click ctx "iframe[title=\"Chat content\"]")
+      ; )))
+      ; (log/trace "looking for iframe"
+      ;            (wd/query ctx "iframe[title=\"Chat content\"]")
+      ;            (wd/query ctx "iframe.bl"))
+      ; (with-frame-el ctx
+      ;   (wd/wait-exists ctx "div[spellcheck]" {:timeout 5 :interval 0.2})))))
+
+(defn find-input-div
+  [ctx]
+  (as-> (wd/query-all ctx "iframe[title=\"Chat content\"]") $
+        (map (fn [frame] (with-frame-el ctx frame
+                        [frame (wd/query-all ctx "div[spellcheck]")])) $)
+        (some (fn [[frame divs]] (when (not-empty divs) [frame (first divs)])) $)))
 
 (defn send-message
   [ctx msg]
-  (with-frame-n ctx 5
-   (wd/fill ctx "div[spellcheck]" msg)
-   (wd/fill ctx "div[spellcheck]" keys/enter)
-  ))
+  (log/trace "sending message" msg)
+  (wd/wait-predicate
+    (partial find-input-div ctx)
+    {:timeout 5 :message "Couldn't find input div after 5 seconds"})
+  (let [[frame div] (find-input-div ctx)]
+    (log/trace "sending to" frame div)
+    (with-frame-el ctx frame
+      (wd/fill-el ctx div msg keys/enter))))
 
 (defn ->IRCNick
   [name]
@@ -79,11 +107,12 @@
       (str "#" $)))
 
 (defn dm-info
-  [ctx id]
-  (let [name (wd/get-element-attr ctx [id "span[data-member-id]"] :data-name)
-        email (wd/get-element-attr ctx [id "span[data-member-id]"] :data-hovercard-id)
+  [ctx selector]
+  (let [name (wd/get-element-attr ctx [selector "span[data-member-id]"] :data-name)
+        email (wd/get-element-attr ctx [selector "span[data-member-id]"] :data-hovercard-id)
         [_ user host] (re-matches #"([^@]+)@(.+)" email)]
-  {:name (->IRCNick name)
+  {:id (wd/get-element-attr ctx selector :data-group-id)
+   :name (->IRCNick name)
    :user user
    :realname name
    :host host
@@ -99,20 +128,16 @@
 ; one per user in the room
 ; for channels, there's going to be a <span> with role=presentation title=<channel name>
 (defn el->UserChannel
-  [ctx iframe el]
-  (let [id (el->selector ctx el)
-        _ (log/trace "UserChannel" id)
-        users (wd/query-all ctx [id "span[data-member-id]"])
-        _ (log/trace "got user list")
-        ; timestamp (maybe-get-attr ctx id :span :data-absolute-timestamp)
-        _ (log/trace "got timestamp")]
+  [ctx el]
+  (let [selector (id->selector (el->id ctx el))
+        users (wd/query-all ctx [selector "span[data-member-id]"])]
     (cond
       (empty? users) nil
-      (= 1 (count users)) (dm-info ctx id)
+      (= 1 (count users)) (dm-info ctx selector)
       :else ; ad hoc channel
-      {:id [iframe el]
-       :name (->IRCChannel (ad-hoc-channel-name ctx id))
-       :topic (ad-hoc-channel-name ctx id)
+      {:id (wd/get-element-attr ctx selector :data-group-id)
+       :name (->IRCChannel (ad-hoc-channel-name ctx selector))
+       :topic (ad-hoc-channel-name ctx selector)
        :count (count users)
        :users [] ; FIXME
        ; :timestamp timestamp
@@ -120,13 +145,14 @@
       )))
 
 (defn el->RoomChannel
-  [ctx iframe el]
-  (let [id (el->selector ctx el)
-        timestamp (maybe-get-attr ctx id :span :data-absolute-timestamp)
-        _ (log/trace "got timestamp" timestamp)]
-    {:id [iframe el]
-     :name (->IRCChannel (ad-hoc-channel-name ctx id))
-     :topic (ad-hoc-channel-name ctx id)
+  [ctx el]
+  (let [selector (id->selector (el->id ctx el))
+        ; timestamp (maybe-get-attr ctx id :span :data-absolute-timestamp)
+        ; _ (log/trace "got timestamp" timestamp)
+        ]
+    {:id (wd/get-element-attr ctx selector :data-group-id)
+     :name (->IRCChannel (ad-hoc-channel-name ctx selector))
+     :topic (ad-hoc-channel-name ctx selector)
      :count 0  ; FIXME
      :users []
      ; :timestamp timestamp
@@ -136,14 +162,14 @@
   (log/trace "Getting chats in iframe" iframe)
   (with-frame-el ctx iframe
     (->> (wd/query-all ctx "span[role=listitem]")
-         (map (partial el->UserChannel ctx iframe))
+         (map (partial el->UserChannel ctx))
          doall)))
 
 (defn list-rooms [ctx iframe]
   (log/trace "Getting rooms in iframe" iframe)
   (with-frame-el ctx iframe
     (->> (wd/query-all ctx "span[role=listitem]")
-         (map (partial el->RoomChannel ctx iframe))
+         (map (partial el->RoomChannel ctx))
          doall)))
 
 (defn list-all [ctx]
@@ -165,7 +191,9 @@
 
 (defn- rebuild-cache [ctx]
   (reduce
-    (fn [cache chat] (assoc cache (:name chat) chat))
+    (fn [cache chat]
+      (log/trace "Cache update:" (:name chat) "->" (:id chat))
+      (assoc cache (:name chat) chat))
     {:ts (timestamp)}
     (list-all ctx)))
 
@@ -173,7 +201,7 @@
   [cache ctx]
   (if (> (- (timestamp) (:ts @cache)) (* 60 60))
     (do
-      (log/trace "Cache ts" (:ts @cache) "older than now of" (timestamp) "- rebuilding")
+      (log/info "Cache ts" (:ts @cache) "older than now of" (timestamp) "- rebuilding")
       (reset! cache (rebuild-cache ctx)))
     @cache))
 
@@ -184,7 +212,7 @@
    (if (contains? @cache key)
      (@cache key)
      (do
-       (log/trace "Cache miss on key" key "- rebuilding")
+       (log/warn "Cache miss on key" key "- rebuilding")
        (get (reset! cache (rebuild-cache ctx)) key)))))
 
 (defn create :- (s/protocol ZeiatBackend)
@@ -223,6 +251,11 @@
         (log/trace "stub: read-messages" this channel)
         [])
       (writeMessage [this channel message]
-        ; (let [chat (read-cache cache @ctx channel)]
-        ;   )
-        (log/trace "stub: write-message" this channel message)))))
+        ; TODO handle translation from IRC formatting codes to Hangouts markdownish codes
+        ; https://support.google.com/chat/answer/7649118?hl=en
+        (log/trace "writeMessage" channel message)
+        (when-let [chat (read-cache cache @ctx channel)]
+          (log/trace "context from cache:" chat)
+          (select-chat @ctx (:id chat))
+          (send-message @ctx message)
+          true)))))

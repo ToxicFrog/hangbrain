@@ -63,3 +63,14 @@
   [_ channel]
   ; todo stub this out -- reply with 324 nick #channel +ntr, 329 nick #channel 0
   *state*)
+
+(defmethod message :PRIVMSG
+  [_ channel msg]
+  ; TODO: echo the sent message back to the client when it appears, if the client
+  ; has negotiated the echo capability
+  ; TODO: handle CTCP properly, especially CTCP ACTION
+  (if (.writeMessage (:backend *state*) channel msg)
+    *state*
+    (if (string/starts-with? channel "#")
+      (numeric 403 channel "No such channel")
+      (numeric 401 channel "No such user"))))
