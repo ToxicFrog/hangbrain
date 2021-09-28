@@ -57,22 +57,6 @@
     (when (not= hash (wd/get-hash ctx))
       (wd/set-hash ctx (str "chat/" id))
       )))
-      ; (wd/wait ctx 1)
-      ; (run!
-      ;   (fn [frame]
-      ;     (log/trace "iframe visible?" (wd/visible? ctx (wd/el->ref frame)))
-      ;     (with-frame-el ctx frame
-      ;       (log/trace "divs" (wd/query-all ctx "div[spellcheck]"))
-      ;       (if (wd/exists? ctx "div[spellcheck]")
-      ;         (wd/click ctx "div[spellcheck]"))))
-      ;   (wd/query-all ctx "iframe[title=\"Chat content\"]"))
-      ; (wd/click ctx "iframe[title=\"Chat content\"]")
-      ; )))
-      ; (log/trace "looking for iframe"
-      ;            (wd/query ctx "iframe[title=\"Chat content\"]")
-      ;            (wd/query ctx "iframe.bl"))
-      ; (with-frame-el ctx
-      ;   (wd/wait-exists ctx "div[spellcheck]" {:timeout 5 :interval 0.2})))))
 
 (defn find-input-div
   [ctx]
@@ -106,44 +90,6 @@
       (string/replace $ #"[ ,]+", "-")
       (str "#" $)))
 
-(defn dm-info
-  [ctx selector]
-  (let [name (wd/get-element-attr ctx [selector "span[data-member-id]"] :data-name)
-        email (wd/get-element-attr ctx [selector "span[data-member-id]"] :data-hovercard-id)
-        [_ user host] (re-matches #"([^@]+)@(.+)" email)]
-  {:id (wd/get-element-attr ctx selector :data-group-id)
-   :name (->IRCNick name)
-   :user user
-   :realname name
-   :host host
-   :type :dm}))
-
-; if we innerText a DM, the first line is going to be "Active", "Away", etc
-; if there are unread messages, the second line will be "Unread"
-; for DMs, inside the el, we're going to have a <span> with
-;  data-hovercard-id=<email>
-;  data-name=<human-readable name>
-; timestamp is in span[data-absolute-timestamp]
-; for ad hoc rooms there are going to be *multiple* spans with those elements,
-; one per user in the room
-; for channels, there's going to be a <span> with role=presentation title=<channel name>
-(defn el->UserChannel
-  [ctx el]
-  (let [selector (id->selector (el->id ctx el))
-        users (wd/query-all ctx [selector "span[data-member-id]"])]
-    (cond
-      (empty? users) nil
-      (= 1 (count users)) (dm-info ctx selector)
-      :else ; ad hoc channel
-      {:id (wd/get-element-attr ctx selector :data-group-id)
-       :name (->IRCChannel (ad-hoc-channel-name ctx selector))
-       :topic (ad-hoc-channel-name ctx selector)
-       :count (count users)
-       :users [] ; FIXME
-       ; :timestamp timestamp
-       :type :channel}
-      )))
-
 (defn el->RoomChannel
   [ctx el]
   (let [selector (id->selector (el->id ctx el))
@@ -158,12 +104,52 @@
      ; :timestamp timestamp
      :type :channel}))
 
+(def js-list-user-channels
+  "
+  let map = (f,xs) => Array.prototype.map.call(xs, f);
+  let toUser = span => {
+    let name = span.dataset.name;
+    let [user,host] = span.dataset.hovercardId.split('@');
+    return {
+      realname: name,
+      user: user,
+      host: host,
+    };
+  };
+  let chats = [];
+  let toChat = span => {
+    let id = span.dataset.groupId;
+    let users = map(toUser, span.querySelectorAll('span[data-member-id]'));
+    let timestamp = span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp || 0;
+    if (users.length > 1) {
+      let topic = span.querySelector('span[role=presentation][title]').title;
+      return { id: id, users: users, topic: topic, timestamp: timestamp, type: 'channel' };
+    } else if (users.length == 1) {
+      return Object.assign(users[0], { id: id, timestamp: timestamp, type: 'dm' });
+    } else {
+      return false;
+    }
+  };
+  return map(toChat, document.querySelectorAll('span[role=listitem]')).filter(x=>x);
+  ")
+
+(defn ->ChatInfo [info]
+  (log/trace "->ChatInfo" info)
+  (let [info (update info :type keyword)]
+    (case (:type info)
+      :dm (assoc info :name (->IRCNick (:realname info)))
+      :channel (assoc info
+                 :count (count (:users info))
+                 :name (->IRCChannel (:topic info)))
+    )))
+
 (defn list-dms [ctx iframe]
   (log/trace "Getting chats in iframe" iframe)
   (with-frame-el ctx iframe
-    (->> (wd/query-all ctx "span[role=listitem]")
-         (map (partial el->UserChannel ctx))
-         doall)))
+    (->> (wd/js-execute ctx js-list-user-channels)
+         (map ->ChatInfo)
+         )))
+         ; (into {})))) ; for later, right now it expects a seq
 
 (defn list-rooms [ctx iframe]
   (log/trace "Getting rooms in iframe" iframe)
