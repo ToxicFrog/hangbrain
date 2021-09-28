@@ -29,13 +29,6 @@
     (wd/get-element-attr ctx [root (str (name tag) "[" (name attr) "]")] attr)
     (catch Exception _ nil)))
 
-(defn ad-hoc-channel-name
-  [ctx selector]
-  ; we should save the id here (or rather, the demangled form of it) as the ID
-  ; for later context switching
-  ; then rather than needing to find the button we just set window.location.hash = "#chat/<id>"
-  (wd/get-element-attr ctx [selector "span[role=presentation][title]"] :title))
-
 (defmacro with-frame-el
   [ctx frame & body]
   `(try
@@ -90,21 +83,29 @@
       (string/replace $ #"[ ,]+", "-")
       (str "#" $)))
 
-(defn el->RoomChannel
-  [ctx el]
-  (let [selector (id->selector (el->id ctx el))
-        ; timestamp (maybe-get-attr ctx id :span :data-absolute-timestamp)
-        ; _ (log/trace "got timestamp" timestamp)
-        ]
-    {:id (wd/get-element-attr ctx selector :data-group-id)
-     :name (->IRCChannel (ad-hoc-channel-name ctx selector))
-     :topic (ad-hoc-channel-name ctx selector)
-     :count 0  ; FIXME
-     :users []
-     ; :timestamp timestamp
-     :type :channel}))
+(def js-list-room-channels
+  "
+  let map = (f,xs) => Array.prototype.map.call(xs, f);
+  let toChat = span => {
+    return {
+      id: span.dataset.groupId,
+      timestamp: span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp || 0,
+      topic: span.querySelector('span[role=presentation][title]').title,
+      users: [],
+      count: 0,
+      type: 'channel'
+    };
+  };
+  return map(toChat, document.querySelectorAll('span[role=listitem]'));
+  ")
 
 (def js-list-user-channels
+  "JS code to read the chat list in the top navigation iframe. Conveniently, the chat entries in this iframe have information about the participants embedded in them.
+  This contains three different kinds of chats:
+  - DMs, which have one user present and should be represented as users;
+  - ad hoc channels, which have multiple users and a name derived from those of all the participants;
+  - and defunct channels, which have zero users and should be elided entirely.
+  "
   "
   let map = (f,xs) => Array.prototype.map.call(xs, f);
   let toUser = span => {
@@ -116,14 +117,13 @@
       host: host,
     };
   };
-  let chats = [];
   let toChat = span => {
     let id = span.dataset.groupId;
     let users = map(toUser, span.querySelectorAll('span[data-member-id]'));
     let timestamp = span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp || 0;
     if (users.length > 1) {
       let topic = span.querySelector('span[role=presentation][title]').title;
-      return { id: id, users: users, topic: topic, timestamp: timestamp, type: 'channel' };
+      return { id: id, users: users, topic: topic, timestamp: timestamp, count: users.length, type: 'channel' };
     } else if (users.length == 1) {
       return Object.assign(users[0], { id: id, timestamp: timestamp, type: 'dm' });
     } else {
@@ -138,9 +138,7 @@
   (let [info (update info :type keyword)]
     (case (:type info)
       :dm (assoc info :name (->IRCNick (:realname info)))
-      :channel (assoc info
-                 :count (count (:users info))
-                 :name (->IRCChannel (:topic info)))
+      :channel (assoc info :name (->IRCChannel (:topic info)))
     )))
 
 (defn list-dms [ctx iframe]
@@ -154,9 +152,9 @@
 (defn list-rooms [ctx iframe]
   (log/trace "Getting rooms in iframe" iframe)
   (with-frame-el ctx iframe
-    (->> (wd/query-all ctx "span[role=listitem]")
-         (map (partial el->RoomChannel ctx))
-         doall)))
+    (->> (wd/js-execute ctx js-list-room-channels)
+         (map ->ChatInfo)
+         )))
 
 (defn list-all [ctx]
   (let [[dm-iframe channel-iframe] (wd/query-all ctx "div[role=navigation] iframe")]
