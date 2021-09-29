@@ -15,20 +15,6 @@
     [hangbrain.zeiat.backend :refer [Channel ZeiatBackend]]
     ))
 
-(defn id->selector
-  [id]
-  (str "#" (string/replace id "/" "\\/")))
-
-(defn el->id
-  [ctx el]
-  (wd/get-element-attr-el ctx el :id))
-
-(defn maybe-get-attr
-  [ctx root tag attr]
-  (try
-    (wd/get-element-attr ctx [root (str (name tag) "[" (name attr) "]")] attr)
-    (catch Exception _ nil)))
-
 (defmacro with-frame-el
   [ctx frame & body]
   `(try
@@ -295,15 +281,33 @@
              (get-in cache [channel :timestamp])))))
 
 (defn- post-process
-  [chat messages]
+  [chat me messages]
   (if (= :dm (:type chat))
     (map
       (fn [message]
-        ))
+        (log/trace "post-process" me message)
+        (if (= me (:author message))
+          (assoc message :from :me :to chat)
+          (assoc message :from chat :to :me)))
+      messages)
     (map
       (fn [message]
-        (assoc message))))
-  )
+        (log/trace "post-process" me message)
+        (if (= me (:author message))
+          (assoc message :from :me :to chat)
+          (assoc message :from (:author message) :to chat)))
+      messages)))
+
+(defn get-logged-in-account
+  [ctx]
+  (let [info
+        (wd/js-execute
+          ctx "return document.querySelector('header[role=banner] a[aria-label*=Account]').getAttribute('aria-label')")
+        [_ realname user host] (re-find #"Google Account: ([^\n]+)\n\(([^@]+)@(.*)\)" info)]
+    {:name (->IRCNick realname)
+     :realname (string/trim realname)
+     :user user
+     :host host}))
 
 (defn create :- (s/protocol ZeiatBackend)
   [opts]
@@ -313,11 +317,15 @@
         ; - whenever a cache miss occurs
         ; - whenever a request for the entire cache (listUsers/Channels) occurs
         ;   and the cache contents are more than an hour old
-        cache (atom {})]
+        cache (atom {})
+        ; A name/user/host/realname struct containing information about the user
+        ; we're logged in as
+        me (atom nil)]
     (reify ZeiatBackend
       (connect [this]
         (log/info "Connecting to Google Chat...")
         (swap! ctx startup-browser (:browser opts) (:profile opts))
+        (reset! me (get-logged-in-account @ctx))
         (log/info "Connected."))
       (disconnect [this]
         (if @ctx
@@ -350,17 +358,31 @@
         (when-let [chat (read-cache cache @ctx channel)]
           (:users chat)))
       (readMessages [this channel]
+        ; TODO this needs some additional design work
+        ; right now a returned message has a timestamp, author, and text
+        ; I think we additionally need :to and :from, which are IRC nicks
+        ; in the case of DMs, every message is either :to or :from the DM target,
+        ; with the other field being the logged in user
+        ; in the case of channels, every message is :to the channel and :from the author
+        ; in both cases, if one of these fields is the logged in user, it should be
+        ; remapped to the IRC user so that they see the messages as coming from themself
+        ; rather than from whatever name they use in googlechat
+        ; this is critical for DMs (as otherwise the client may just discard them as malformed)
+        ; and good UX for channels
+        ; it is also possible that we might extend the (connect) protocol to allow the connector
+        ; to enforce a nick on the user, in which case the server can change their nick as
+        ; soon as they connect to match the logged in nick...something to think about.
         (log/trace "Reading messages from" channel)
         (when-let [chat (read-cache cache @ctx channel)]
           (select-chat @ctx (:id chat))
           (clear-unread cache channel)
-          (post-process chat (read-messages @ctx))))
+          (post-process chat @me (read-messages @ctx))))
       (readNewMessages [this channel]
         (when-let [chat (read-cache cache @ctx channel)]
           (select-chat @ctx (:id chat))
           (let [seen (:seen chat)]
             (clear-unread cache channel)
-            (post-process chat (read-messages-since @ctx seen)))))
+            (post-process chat @me (read-messages-since @ctx seen)))))
       (writeMessage [this channel message]
         ; TODO handle translation from IRC formatting codes to Hangouts markdownish codes
         ; https://support.google.com/chat/answer/7649118?hl=en

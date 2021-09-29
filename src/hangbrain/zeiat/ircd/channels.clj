@@ -5,6 +5,7 @@
     [hangbrain.zeiat.ircd.core :as ircd :refer [message *state* numeric reply-from]]
     [hangbrain.zeiat.translator :as translator]
     [hangbrain.zeiat.types :refer [TranslatorState]]
+    [taoensso.timbre :as log]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [clojure.string :as string]
     ))
@@ -81,9 +82,10 @@
 ; TODO: if this is a DM, it needs to be either a privmsg FROM the dm owner
 ; TO the connected user, or FROM the connected user TO the DM owner -- at the moment
 ; they all show up as TO the DM owner no matter who they're from!
-(defn- privmsg-in
-  [channel msg]
-  (reply-from (fqircn (:author msg)) "PRIVMSG" channel (:text msg)))
+(defn- privmsg
+  [msg]
+  ; (log/trace "privmsg" msg)
+  (reply-from (irctarget (:from msg)) "PRIVMSG" (irctarget (:to msg)) (:text msg)))
 
 (defmethod message :RECAP
   [_ channel]
@@ -91,4 +93,4 @@
     (log/trace "Done fetching RECAP, total message count:" (count recap))
     (if (nil? recap)
       (numeric 403 channel "No such user/channel")
-      (do (run! (partial privmsg-in channel) recap) *state*))))
+      (do (run! privmsg recap) *state*))))
