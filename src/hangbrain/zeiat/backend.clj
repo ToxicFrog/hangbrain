@@ -82,5 +82,7 @@
     "List all users in a given channel. See FIXME for the data shape. Called in response to NAMES or JOIN.")
   (readMessages [this channel]
     "Return all messages from the given channel available in the backscroll. Implementors can limit this to only what's easily available if convenient (e.g. return only history that was autoloaded, not all history). Calling this should mark the chat as read.")
+  (readNewMessages [this channel]
+    "As readMessages but should return only messages have not yet been read. Calling this should mark the chat as read.")
   (writeMessage [this channel message]
     "Send a message to the given channel or user. Calling this should mark the chat as read."))

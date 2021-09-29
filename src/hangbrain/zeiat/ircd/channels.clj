@@ -33,7 +33,8 @@
 
 (defmethod message :WHO
   [_ _filter]
-  ; TODO implement filter support
+  ; TODO implement filter support -- many clients will send a WHO <channel> as soon
+  ; as a channel is successfully joined, so this is actually important.
   (as-> (.listUsers (:backend *state*)) $
         (run! rpl-who $))
   (numeric 315 "End of WHO"))
@@ -60,8 +61,10 @@
   *state*)
 
 (defmethod message :MODE
-  [_ channel]
-  ; todo stub this out -- reply with 324 nick #channel +ntr, 329 nick #channel 0
+  ; stubbed out
+  [_ channel & _modes]
+  (numeric 324 channel "+nt")
+  (numeric 329 channel "0")
   *state*)
 
 (defmethod message :PRIVMSG
@@ -74,3 +77,18 @@
     (if (string/starts-with? channel "#")
       (numeric 403 channel "No such channel")
       (numeric 401 channel "No such user"))))
+
+; TODO: if this is a DM, it needs to be either a privmsg FROM the dm owner
+; TO the connected user, or FROM the connected user TO the DM owner -- at the moment
+; they all show up as TO the DM owner no matter who they're from!
+(defn- privmsg-in
+  [channel msg]
+  (reply-from (fqircn (:author msg)) "PRIVMSG" channel (:text msg)))
+
+(defmethod message :RECAP
+  [_ channel]
+  (let [recap (.readMessages (:backend *state*) channel)]
+    (log/trace "Done fetching RECAP, total message count:" (count recap))
+    (if (nil? recap)
+      (numeric 403 channel "No such user/channel")
+      (do (run! (partial privmsg-in channel) recap) *state*))))

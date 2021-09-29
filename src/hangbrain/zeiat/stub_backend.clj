@@ -30,5 +30,8 @@
     (readMessages [this channel]
       (log/trace "stub: read-messages" this channel)
       [])
+    (readNewMessages [this channel]
+      (log/trace "stub: read-new-messages" this channel)
+      [])
     (writeMessage [this channel message]
       (log/trace "stub: write-message" this channel message))))
