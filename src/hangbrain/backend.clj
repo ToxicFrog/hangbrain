@@ -60,6 +60,7 @@
     };
   };
   let toMessage = elem => {
+    // TODO this is pretty gross when dealing with links/embeds -- do something better
     let html =
       elem.querySelector('div[jsaction^=mouseenter] div[jsaction]').innerHTML
       || elem.querySelector('div[jsaction^=mouseenter] a').href
@@ -86,10 +87,12 @@
   [a]
   (let [href (second (re-find #"href=\"([^\"]+)\"" a))
         text (string/replace a #"</?a[^>]*>" "")]
-    (if (or (= text href)
+    (cond
+      (or (= text href)
           (= text (string/replace href #"^https?://" "")))
       text
-      (str text " [" href "]"))))
+      (not (empty? (string/trim text))) (str "<" href "> " text)
+      :else (str "<" href "> "))))
 
 (def formatting
   [[#"^<i>(.*)</i>$" "\u0001ACTION $1\u0001"]
