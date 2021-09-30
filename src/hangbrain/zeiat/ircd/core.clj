@@ -74,4 +74,6 @@
   [msg]
   (log/trace "privmsg" msg)
   (->> (string/split-lines (:text msg))
+       (map string/trim)
+       (filter (complement empty?))
        (run! (partial reply-from (irctarget (:from msg)) "PRIVMSG" (irctarget (:to msg))))))
