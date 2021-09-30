@@ -4,6 +4,7 @@
   (:require
     [hangbrain.zeiat.types :refer [TranslatorState TranslatorAgent]]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
+    [hangbrain.zeiat.ircd.core :refer [*state* privmsg]]
     [taoensso.timbre :as log]
     ))
 
@@ -12,11 +13,33 @@
   [state :- TranslatorState]
   state)
 
+(defn- interesting?
+  [state chat]
+  (or (= (:type chat) :dm)
+    (contains? (:channels state) (:name chat))))
+
+(defn- poll
+  [{:keys [backend socket] :as state}]
+  (if (.isClosed socket)
+    (log/trace "poll thread exiting")
+    (do
+      (log/trace "polling for new messages...")
+      (binding [*state* state]
+        (->> (.listUnread (:backend state))
+             (filter (partial interesting? state))
+             (map :name)
+             (mapcat #(.readNewMessages backend %))
+             (run! privmsg)))
+      (future
+        (Thread/sleep 5000)
+        (send *agent* poll))
+      state)))
+
 (defn connect! :- TranslatorState
   "Called when user registration completes successfully. Should connect to the backend."
   [state :- TranslatorState]
   (.connect (:backend state))
-  state)
+  (poll state))
 
 (defn shutdown! :- TranslatorState
   ([state]

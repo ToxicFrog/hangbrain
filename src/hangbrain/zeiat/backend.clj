@@ -9,8 +9,6 @@
 
 (defschema Chat s/Any)
 
-(defschema Message s/Any)
-
 ; LIST
 ; - get: nothing
 ; - need: irc name
@@ -63,6 +61,17 @@
    :host UserName
    :realname s/Str
    })
+
+(defschema Chat
+  ; TODO use cond-pre here, etc
+  (s/either User Channel))
+
+(defschema Message
+  {:timestamp s/Int
+   :author User
+   :from Chat
+   :to Chat
+   :text s/Str})
 
 (defprotocol ZeiatBackend
   "A protocol that Zeiat uses to communicate with whatever backend you connect to it. Library users should supply something that implements this protocol to zeiat/run."

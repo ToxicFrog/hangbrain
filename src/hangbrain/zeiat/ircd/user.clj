@@ -14,7 +14,7 @@
 (defn- registered?
   "True if the client connection is fully registered."
   [state]
-  (and (:nick state) (:uname state)))
+  (and (:name state) (:user state)))
 
 (defn- check-registration [state]
   (if (registered? state)
@@ -32,7 +32,7 @@
     (numeric 484 "NICK command restricted")
     ; Otherwise add it to the state
     (-> *state*
-        (assoc :nick nick)
+        (assoc :name nick)
         (check-registration))))
 
 (defmethod message :USER :- TranslatorState
@@ -40,8 +40,8 @@
   (if (registered? *state*)
     (numeric 462 "Connection already registered.")
     (-> *state*
-        (assoc :uname uname)
-        (assoc :rname rname)
+        (assoc :user uname)
+        (assoc :realname rname)
         (check-registration))))
 
 (defmethod message :PASS :- TranslatorState

@@ -92,7 +92,7 @@
       (str text " [" href "]"))))
 
 (def formatting
-  [[#"^<i>(.*)</i>$" "\u0001ACTION$1\u0001"]
+  [[#"^<i>(.*)</i>$" "\u0001ACTION $1\u0001"]
    [#"</?b>" "\u0002"]
    [#"</?i>" "\u001D"]
    [#"</?u>" "\u001F"]
@@ -130,7 +130,7 @@
   ; TODO factor this out, maybe make find-input-div itself block
   (wd/wait-predicate
     (partial find-input-div ctx)
-    {:timeout 5 :message "Couldn't find input div after 5 seconds"})
+    {:timeout 10 :message "Couldn't find input div after 10 seconds"})
   (let [iframe (first (find-input-div ctx))]
     (with-frame-el ctx iframe
       (->> (wd/js-execute ctx js-read-messages)
@@ -138,15 +138,24 @@
 
 (defn- read-messages-since
   [ctx timestamp]
+  (log/trace "timestamp" timestamp (type timestamp))
   (->> (read-messages ctx)
-       (drop-while #(<= timestamp (:timestamp %)))))
+       (drop-while #(<= (compare (:timestamp %) timestamp) 0))))
+
+(defn- irc-to-hangouts
+  [msg]
+  ; TODO handle CTCP and formatting codes here
+  ; italics turn into _, bold into *
+  ; underline is not supported
+  ; CTCP ACTION should turn into italics, discard other CTCPs
+  msg)
 
 (defn send-message
   [ctx msg]
   (log/trace "sending message" msg)
   (wd/wait-predicate
     (partial find-input-div ctx)
-    {:timeout 5 :message "Couldn't find input div after 5 seconds"})
+    {:timeout 10 :message "Couldn't find input div after 10 seconds"})
   (let [[frame div] (find-input-div ctx)]
     (log/trace "sending to" frame div)
     (with-frame-el ctx frame
@@ -158,7 +167,7 @@
   let toChat = span => {
     return {
       id: span.dataset.groupId,
-      timestamp: span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp || 0,
+      timestamp: span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp || '0',
       topic: span.querySelector('span[role=presentation][title]').title,
       unread: span.innerText.includes('Unread'),
       users: [],
@@ -190,7 +199,7 @@
   let toChat = span => {
     let id = span.dataset.groupId;
     let users = map(toUser, span.querySelectorAll('span[data-member-id]'));
-    let timestamp = span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp || 0;
+    let timestamp = span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp || '0';
     let unread = span.innerText.includes('Unread');
     if (users.length > 1) {
       let topic = span.querySelector('span[role=presentation][title]').title;
@@ -205,9 +214,8 @@
   ")
 
 (defn ->ChatInfo [info]
-  (log/trace "->ChatInfo" info)
   (let [info (update info :type keyword)
-        seen (if (:unread info) 0 (:timestamp info))
+        seen (if (:unread info) "0" (:timestamp info))
         name (case (:type info)
                :dm (->IRCNick (:realname info))
                :channel (->IRCChannel (:topic info)))]
@@ -238,7 +246,7 @@
 
 (defn- startup-browser [ctx bin profile]
   (assert (nil? ctx) "Attempt to startup browser when it's already running!")
-  (doto (wd/chrome {:args [(str "--user-data-dir=" profile)]
+  (doto (wd/chrome-headless {:args [(str "--user-data-dir=" profile)]
      :path-browser bin
      :locator "css selector"})
     (wd/go "https://chat.google.com/")
@@ -258,7 +266,7 @@
   [cache ctx]
   (reduce
     (fn [cache chat]
-      (log/trace "Cache update:" (:name chat) "->" (:id chat))
+      (log/trace "Cache update:" (:name chat) "->" chat)
       (update cache (:name chat) update-or-insert chat))
     cache
     (list-all ctx)))
@@ -342,8 +350,14 @@
         (filter #(= :dm (:type %))
           (read-cache cache @ctx)))
       (listUnread [this]
-        (filter #(not= (:seen %1) (:timestamp %1))
-          (read-cache cache @ctx)))
+        (->> (read-cache cache @ctx)
+             (filter #(not= (:seen %1) (:timestamp %1)))
+             (map (fn [chat]
+                    (log/info "Chat is unread:" chat)
+                    chat))))
+          ; (read-cache cache @ctx)))
+      (statChannel [this channel]
+        (read-cache cache @ctx channel))
       (listMembers [this channel]
         ; TODO: this works only for channels which have a list of users in the cache entry,
         ; which does not include named channels; to get the user list for those, it's kind of

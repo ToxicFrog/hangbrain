@@ -52,7 +52,7 @@
   [socket :- Socket, backend :- ZeiatBackend]
   (let [agent (agent {:socket socket
                       :backend backend
-                      :nick nil :uname nil :rname nil
+                      :name nil :user nil :realname nil
                       :channels #{}
                       :autojoin false
                       :writer (-> socket io/writer (PrintWriter. true))}

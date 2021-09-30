@@ -24,9 +24,9 @@
 (defschema IRCState
   "The current state of a connection to the IRC interface."
   {; User identification
-   :nick (s/maybe s/Str)
-   :uname (s/maybe s/Str)
-   :rname (s/maybe s/Str)
+   :name (s/maybe s/Str)
+   :user (s/maybe s/Str)
+   :realname (s/maybe s/Str)
    ; Which channels have they joined?
    :channels #{s/Str}
    ; Should we autojoin them to channels with activity?

@@ -35,7 +35,7 @@
   (.println
     (:writer *state*)
     (fields-to-message
-      (concat [":Zeiat" (format "%03d" num) (:nick *state* "*")] fields)))
+      (concat [":Zeiat" (format "%03d" num) (:name *state* "*")] fields)))
   *state*)
 
 (defn join-channel
@@ -63,3 +63,15 @@
       (catch clojure.lang.ArityException e
         (log/warn e "internal error handling command")
         (numeric 461 command "Wrong number of arguments for command")))))
+
+(defn- irctarget
+  [who]
+  (if (= :me who)
+    (:name *state*)
+    (:name who)))
+
+(defn privmsg
+  [msg]
+  (log/trace "privmsg" msg)
+  (->> (string/split-lines (:text msg))
+       (run! (partial reply-from (irctarget (:from msg)) "PRIVMSG" (irctarget (:to msg))))))
