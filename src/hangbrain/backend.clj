@@ -69,7 +69,7 @@
     }
     return {
      author: toUser(elem.querySelector('span[data-member-id]')),
-     timestamp: elem.querySelector('span[data-absolute-timestamp]').dataset.absoluteTimestamp,
+     timestamp: elem.querySelector('span[data-absolute-timestamp]').dataset.absoluteTimestamp.split('.')[0],
      html: html
     };
   };
@@ -167,7 +167,7 @@
   let toChat = span => {
     return {
       id: span.dataset.groupId,
-      timestamp: span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp || '0',
+      timestamp: span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp.split('.')[0] || '0',
       topic: span.querySelector('span[role=presentation][title]').title,
       unread: span.innerText.includes('Unread'),
       users: [],
@@ -199,7 +199,7 @@
   let toChat = span => {
     let id = span.dataset.groupId;
     let users = map(toUser, span.querySelectorAll('span[data-member-id]'));
-    let timestamp = span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp || '0';
+    let timestamp = span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp.split('.')[0] || '0';
     let unread = span.innerText.includes('Unread');
     if (users.length > 1) {
       let topic = span.querySelector('span[role=presentation][title]').title;
