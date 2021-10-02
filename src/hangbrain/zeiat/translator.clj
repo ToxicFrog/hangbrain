@@ -29,6 +29,7 @@
              (filter (partial interesting? state))
              (map :name)
              (mapcat #(.readNewMessages backend %))
+             (filter #(not (= :me (:from %))))
              (run! privmsg)))
       (future
         (Thread/sleep 5000)
