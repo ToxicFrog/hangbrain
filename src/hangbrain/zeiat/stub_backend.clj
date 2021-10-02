@@ -15,23 +15,26 @@
     (disconnect [this]
       (log/trace "stub: disconnect" this))
     (listChannels [this]
-      (log/trace "stub: list" this)
+      (log/trace "stub: listChannels" this)
       [])
-    (statChannel [this channel])
     (listUsers [this]
-      (log/trace "stub: list" this)
+      (log/trace "stub: listUsers" this)
       [])
     (listUnread [this]
-      (log/trace "stub: list-unread" this)
+      (log/trace "stub: listUnread" this)
       [])
+    (statChannel [this channel]
+      (log/trace "stub: statChannel" this channel)
+      {:name "#test" :users [] :count 0 :topic "test channel"})
     (listMembers [this channel]
-      (log/trace "stub: list-members" this channel)
+      (log/trace "stub: listMembers" this channel)
       [])
     (readMessages [this channel]
-      (log/trace "stub: read-messages" this channel)
+      (log/trace "stub: readMessages" this channel)
       [])
     (readNewMessages [this channel]
-      (log/trace "stub: read-new-messages" this channel)
+      (log/trace "stub: readNewMessages" this channel)
       [])
     (writeMessage [this channel message]
-      (log/trace "stub: write-message" this channel message))))
+      (log/trace "stub: writeMessage" this channel message)
+      true)))

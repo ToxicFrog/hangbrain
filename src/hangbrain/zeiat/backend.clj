@@ -1,5 +1,5 @@
 (ns hangbrain.zeiat.backend
-  "Schema and protocol definitions for Zeiat backends."
+  "Schema and protocol definitions for Zeiat backends. If implementing a new backend, you should start here."
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
@@ -12,9 +12,7 @@
     #(re-matches #"#[^ ,]+" %)))
 
 (defschema UserName
-  "An IRC-compatible user name."
-  ; Nominally this is any letter or one of [\]`_^{|}, followed by a run of those + digits and/or hyphens
-  ; I take this a bit further and just say: it's not allowed to contain space, !, @, or :
+  "An IRC-compatible user name. This is somewhat more permissive than rfc2812, allowing any non-empty name that doesn't contain !@: or whitespace."
   (s/constrained
     s/Str
     #(re-matches #"[^ !@:]+")))
