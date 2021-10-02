@@ -19,7 +19,7 @@
   [agent error]
   (log/warn error "Error in agent" agent)
   (try
-    (translator/shutdown! @agent)
+    (translator/shutdown! @agent (str error))
     (catch Exception e
       (log/error e "Error shutting down agent")
       (System/exit 2))))
@@ -54,7 +54,6 @@
                       :backend backend
                       :name nil :user nil :realname nil
                       :channels #{}
-                      :autojoin false
                       :writer (-> socket io/writer (PrintWriter. true))}
                 ; We do not install the validator here because we can't create the :reader field
                 ; until after the agent has been created; so instead we partially create the agent

@@ -10,17 +10,6 @@
   "Schema for objects implementing the Zeiat backend protocol. See zeiat.backend for details."
   (s/protocol backend/ZeiatBackend))
 
-(defschema ClientState
-  "The parts of a Zeiat agent state that contain information "
-  "A Zeiat client consists of:
-  - a client socket
-  - a thread constantly reading messages from that socket
-  - a translator agent that handles all message processing and socket writes
-  "
-
-(defschema IRCState
-  "The current state of a connection to the IRC interface."
-
 (defschema TranslatorState
   "The internal state of a Zeiat translator session.
   Structurally, a Zeiat session consists of:
