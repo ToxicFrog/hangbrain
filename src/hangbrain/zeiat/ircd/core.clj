@@ -8,8 +8,6 @@
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [io.aviso.exception :refer [write-exception]]
     [clojure.string :as string]))
-  ; (:import
-  ;   [java.lang ArityException]))
 
 (def ^:dynamic *state* nil)
 
