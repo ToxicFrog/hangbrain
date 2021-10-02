@@ -5,6 +5,8 @@
     [hangbrain.zeiat.ircd.core :as ircd-core]
     [hangbrain.zeiat.ircd.user]
     [hangbrain.zeiat.ircd.channels]
+    [hangbrain.zeiat.ircd.messages]
+    [hangbrain.zeiat.ircd.list]
     [taoensso.timbre :as log]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [clojure.string :as string]
