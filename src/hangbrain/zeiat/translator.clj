@@ -44,11 +44,11 @@
 (defn- poll
   [{:keys [backend socket] :as state}]
   (if (.isClosed socket)
-    (log/trace "poll thread exiting")
+    (do (log/trace "poll thread exiting") state)
     (do
       (log/trace "polling for new messages...")
       (binding [*state* state]
-        (->> (backend/list-chat-status (:backend state))
+        (->> (backend/list-chat-status backend)
              (filter (partial interesting? state))
              (filter (partial unread? state))
              (map :name)

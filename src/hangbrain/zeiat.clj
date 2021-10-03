@@ -45,7 +45,7 @@
         (log/trace "socket closed, gbye")
         (catch Exception e
           (log/error e "Error reading from socket" socket "shutting down this client.")
-          (send agent translator/shutdown!))))))
+          (send agent translator/shutdown! "client socket closed"))))))
 
 (defn create :- TranslatorAgent
   "Create a translator agent with its state initialized to the client socket and backend config."
