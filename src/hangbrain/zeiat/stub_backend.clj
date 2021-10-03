@@ -20,9 +20,6 @@
     (listUsers [this]
       (log/trace "stub: listUsers" this)
       [])
-    (listUnread [this]
-      (log/trace "stub: listUnread" this)
-      [])
     (listChatStatus [this]
       (log/trace "stub: listChatStatus" this)
       [])
@@ -37,9 +34,6 @@
       [])
     (readMessagesSince [this channel id]
       (log/trace "stub: readMessages" this channel id)
-      [])
-    (readNewMessages [this channel]
-      (log/trace "stub: readNewMessages" this channel)
       [])
     (writeMessage [this channel message]
       (log/trace "stub: writeMessage" this channel message)

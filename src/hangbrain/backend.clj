@@ -260,48 +260,6 @@
     (wd/go "https://chat.google.com/")
     (wd/wait-exists "div#talk_roster" {:timeout 30 :interval 1})))
 
-(defn update-or-insert
-  "Update a cache entry or insert a new one.
-  The :seen field from the old entry, if present, is retained, so we don't forget about read status every time we refresh the cache."
-  ; TODO: if a chat is marked unread it'll be returned with seen=0, but the old seen sticks, and for some reason the timestamp
-  ; doesn't always update?
-  [chat chat']
-  (if (not= chat chat')
-    (do
-      (log/trace "Cache update:" (:name chat') "->" chat')
-      (merge chat' (select-keys chat [:seen])))
-    chat))
-
-(defn rebuild-cache
-  "Rebuild the channel cache.
-  This rescans the chat list completely and populates the cache from it, retaining the :seen field from any previous cache entries."
-  ; TODO: we should clear cache entries that no longer exist on the server!
-  ; this is probably easier if list-all returns a map rather than a list, and then we can do cache -> (select-keys cache (keys new-channels))
-  [cache ctx]
-  (reduce
-    (fn [cache chat]
-      (update cache (:name chat) update-or-insert chat))
-    cache
-    (list-all ctx)))
-
-(defn- read-cache
-  ([cache ctx] ; read all cache entries -> always rebuild
-   (vals (swap! cache rebuild-cache ctx)))
-  ([cache ctx key] ; read specific entry -> rebuild on cache miss
-   (if (contains? @cache key)
-     (@cache key)
-     (do
-       (log/warn "Cache miss on key" key "- rebuilding")
-       (get (swap! cache rebuild-cache ctx) key)))))
-
-(defn clear-unread
-  [cache channel]
-  (println "Clear unread marker on" channel)
-  (swap! cache
-         (fn [cache]
-           (assoc-in cache [channel :seen]
-             (get-in cache [channel :timestamp])))))
-
 (defn- post-process
   [chat me messages]
   (if (= :dm (:type chat))
@@ -331,15 +289,14 @@
      :user user
      :host host}))
 
+(defn- log-also
+  [msg v]
+  (log/trace msg v)
+  v)
+
 (defn create :- (s/protocol ZeiatBackend)
   [opts]
   (let [ctx (atom nil) ; context for the webdriver
-        ; cache mapping IRC channels/nicks to chat information maps
-        ; the cache is updated:
-        ; - whenever a cache miss occurs
-        ; - whenever a request for the entire cache (listUsers/Channels) occurs
-        ;   and the cache contents are more than an hour old
-        cache (atom {})
         ; A name/user/host/realname struct containing information about the user
         ; we're logged in as
         me (atom nil)]
@@ -359,20 +316,10 @@
           (log/info "Ignoring shutdown request, backend already shut down.")))
       (listChannels [this]
         (filter #(= :channel (:type %))
-          (read-cache cache @ctx)))
+          (list-all @ctx)))
       (listUsers [this]
         (filter #(= :dm (:type %))
-          (read-cache cache @ctx)))
-      ; TODO: there's an issue here where reading the contents of a channel
-      ; doesn't always list it as unread *in hangouts*, so polling keeps returning
-      ; it as unread even though readNewMessages() returns nothing.
-      (listUnread [this]
-        (->> (read-cache cache @ctx)
-             (filter #(not= (:seen %1) (:timestamp %1)))
-             (map (fn [chat]
-                    (log/info "Chat is unread:" chat)
-                    chat))))
-          ; (read-cache cache @ctx)))
+          (list-all @ctx)))
       (listChatStatus [this]
         (->> (list-all @ctx)
              (map (fn [{:keys [type name timestamp unread] :as chat}]
@@ -381,19 +328,12 @@
                       :name name
                       :type type}))))
       (statChannel [this channel]
-        (read-cache cache @ctx channel))
+        (->> (list-all @ctx)
+             (filter #(= channel (:name %)))
+             first
+             (log-also "stat-channel")))
       (listMembers [this channel]
-        ; TODO: this works only for channels which have a list of users in the cache entry,
-        ; which does not include named channels; to get the user list for those, it's kind of
-        ; grody. We need to select the channel, then click on the "channel name [n members]"
-        ; button in the top left, then "view members", then find the iframe that filled in and
-        ; read the list out of that...this is gross enough that it may be easier to just scan
-        ; the channel history, build a user list based on that, and if it changes re-issue a
-        ; NAMES command.
-        ; This does require some way to tell Zeiat that something changed...eurgh. We're going
-        ; to need to extend the API to allow the backend to send events back to Zeiat in some
-        ; capacity, I think.
-        (when-let [chat (read-cache cache @ctx channel)]
+        (when-let [chat (.statChannel this channel)]
           (:users chat)))
       (readMessages [this channel]
         ; TODO this needs some additional design work
@@ -411,29 +351,19 @@
         ; to enforce a nick on the user, in which case the server can change their nick as
         ; soon as they connect to match the logged in nick...something to think about.
         (log/trace "Reading messages from" channel)
-        (when-let [chat (read-cache cache @ctx channel)]
+        (when-let [chat (.statChannel this channel)]
           (select-chat @ctx (:id chat))
-          (clear-unread cache channel)
           (post-process chat @me (read-messages @ctx))))
-      (readNewMessages [this channel]
-        (when-let [chat (read-cache cache @ctx channel)]
-          (select-chat @ctx (:id chat))
-          (let [seen (:seen chat)]
-            (println "pre-clear-unread" (@cache channel))
-            (clear-unread cache channel)
-            (println "post-clear-unread" (@cache channel))
-            (post-process chat @me (read-messages-since @ctx seen)))))
       (readMessagesSince [this channel id]
-        (when-let [chat (read-cache cache @ctx channel)]
+        (when-let [chat (.statChannel this channel)]
           (select-chat @ctx (:id chat))
-          (clear-unread cache channel)
           (post-process chat @me (read-messages-since @ctx id))))
       (writeMessage [this channel message]
         ; TODO handle translation from IRC formatting codes to Hangouts markdownish codes
         ; https://support.google.com/chat/answer/7649118?hl=en
         (log/trace "writeMessage" channel message)
-        (when-let [chat (read-cache cache @ctx channel)]
-          (log/trace "context from cache:" chat)
+        (when-let [chat (.statChannel this channel)]
+          (log/trace "context from statChannel:" chat)
           (select-chat @ctx (:id chat))
           (send-message @ctx message)
           true)))))

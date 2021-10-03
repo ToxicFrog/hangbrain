@@ -102,8 +102,6 @@
     "List all available channels. Called in response to a user's LIST command.")
   (listUsers [this] ;- [User]
     "List all available (DMable) users. Called in response to a user's WHO command.")
-  (listUnread [this] ;- [Chat]
-    "List all chats (users or channels) with unread messages. Called periodically to monitor for message traffic. Implementations can implement this however they want but note that just blindly returning all chats will result in a lot of unnecessary read-messages calls.")
   (listChatStatus [this] ;- {AnyName ChatStatus}
     "List status information for all chats; should return a map of chat IRC name to status. See the definition for ChatStatus for details on what should be included.")
   (statChannel [this channel] ;- Chat
@@ -114,8 +112,6 @@
     "Return all messages from the given channel available in the backscroll. Implementors can limit this to only what's easily available if convenient (e.g. return only history that was autoloaded, not all history). Calling this should mark the chat as read.")
   (readMessagesSince [this channel id] ;- [Message]
     "Return all messages from the given channel after (not including) the message with the given ID.")
-  (readNewMessages [this channel] ;- [Message]
-    "As readMessages but should return only messages have not yet been read. Calling this should mark the chat as read.")
   (writeMessage [this channel message] ;- bool
     "Send a message to the given channel or user. Calling this should mark the chat as read. Returns true if the message was successfully sent, false otherwise."))
 
@@ -142,10 +138,6 @@
   [this :- Backend, channel :- ChannelName]
   (.listMembers this channel))
 
-(defn list-unread :- [Chat]
-  [this :- Backend]
-  (.listUnread this))
-
 (defn list-chat-status :- [ChatStatus]
   ([this :- Backend]
    (.listChatStatus this)))
@@ -161,10 +153,6 @@
 (defn read-messages-since :- [Message]
   [this :- Backend, channel :- AnyName, id :- s/Any]
   (.readMessagesSince this channel id))
-
-(defn read-new-messages :- [Message]
-  [this :- Backend, channel :- AnyName]
-  (.readNewMessages this channel))
 
 (defn write-message :- s/Bool
   [this :- Backend, channel :- AnyName, msg :- s/Str]
