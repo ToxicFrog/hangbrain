@@ -3,7 +3,7 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
-    ))
+    [clojure.string :as string]))
 
 (defschema ChannelName
   "An IRC-compatible channel name. Only #channels are supported."
@@ -15,14 +15,29 @@
   "An IRC-compatible user name. This is somewhat more permissive than rfc2812, allowing any non-empty name that doesn't contain !@: or whitespace."
   (s/constrained
     s/Str
-    #(re-matches #"[^ !@:]+")))
+    #(re-matches #"[^ !@:]+" %)))
+
+(defschema AnyName
+  (s/conditional
+    #(string/starts-with? % "#") ChannelName
+    string? UserName))
+
+(defschema User
+  "User metadata returned by listUsers and listUnread."
+  {:name UserName
+   :user UserName
+   :host UserName
+   :realname s/Str
+   ; Backend can store whatever additional information here is convenient
+   s/Any s/Any
+   })
 
 (defschema Channel
   "Channel metadata returned by listChannels, listUnread, and statChannel."
   {:name ChannelName  ; IRC-compatible name of channel
    ; List of users on channel. May be empty on listChannels, but should be filled
    ; in if possible by statChannel.
-   :users [UserName]
+   :users [User]
    ; Count is displayed in LIST and is nominally the number of users in the channel,
    ; but in some backends that is either very expensive to determine or not meaningful
    ; at all; in that case the backend may choose to send an "activity count" such as
@@ -32,26 +47,38 @@
    ; useful identifying information the backend can include here is welcome, e.g.
    ; the channel's human-readable name.
    (s/optional-key :topic) s/Str
-   })
-
-(defschema User
-  "User metadata returned by listUsers and listUnread."
-  {:name UserName
-   :user UserName
-   :host UserName
-   :realname s/Str
+   ; Backend can store whatever additional information here is convenient
+   s/Any s/Any
    })
 
 (defschema Chat
+  "Something that can send and receive messages, i.e. either a User or a Channel."
   ; TODO use cond-pre here, etc
-  (s/either User Channel))
+  (s/conditional
+    :user User
+    :users Channel))
+
+(defschema ChatTarget
+  "The target of a chat message; either a User or the special value :me to indicate the logged in user."
+  (s/cond-pre (s/enum :me) User))
 
 (defschema Message
-  {:timestamp s/Int
-   :author User
-   :from Chat
-   :to Chat
-   :text s/Str})
+  {; TODO should probably rename this "id" since it might not be a ts in all backends
+   :timestamp s/Any
+   ; Origin, should be :me if the author is the logged in user and the author otherwise
+   :from (s/cond-pre (s/enum :me) User)
+   ; Destination, should be :me for incoming DMs, the target user for outgoing DMs, and
+   ; the target channel for channel messages
+   :to (s/conditional
+         keyword? (s/enum :me)
+         :user User
+         :users Channel)
+   ; The actual text of the message
+   :text s/Str
+   ; Backend can store whatever additional information here is convenient, e.g.
+   ; timestamps, the original HTML, whatever.
+   s/Any s/Any
+   })
 
 (defprotocol ZeiatBackend
   "A protocol that Zeiat uses to communicate with whatever backend you connect to it. Library users should supply something that implements this protocol to zeiat/run."
@@ -78,3 +105,46 @@
     "As readMessages but should return only messages have not yet been read. Calling this should mark the chat as read.")
   (writeMessage [this channel message] ;- bool
     "Send a message to the given channel or user. Calling this should mark the chat as read. Returns true if the message was successfully sent, false otherwise."))
+
+(defschema ^:private Backend (s/protocol ZeiatBackend))
+
+;; Functions for checked calls to backend impls
+(defn connect
+  [this :- Backend]
+  (.connect this))
+
+(defn disconnect
+  [this :- Backend]
+  (.disconnect this))
+
+(defn list-channels :- [Channel]
+  [this :- Backend]
+  (.listChannels this))
+
+(defn list-users :- [User]
+  [this :- Backend]
+  (.listUsers this))
+
+(defn list-members :- [User]
+  [this :- Backend, channel :- ChannelName]
+  (.listMembers this channel))
+
+(defn list-unread :- [Chat]
+  [this :- Backend]
+  (.listUnread this))
+
+(defn stat-channel :- Channel
+  [this :- Backend, channel :- ChannelName]
+  (.statChannel this channel))
+
+(defn read-messages :- [Message]
+  [this :- Backend, channel :- AnyName]
+  (.readMessages this channel))
+
+(defn read-new-messages :- [Message]
+  [this :- Backend, channel :- AnyName]
+  (.readNewMessages this channel))
+
+(defn write-message :- s/Bool
+  [this :- Backend, channel :- AnyName, msg :- s/Str]
+  (.writeMessage this channel msg))

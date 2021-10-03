@@ -224,6 +224,10 @@
                :channel (->IRCChannel (:topic info)))]
     (-> info
         (assoc :seen seen :name name)
+        (update :users
+          (fn [users] (->> users
+                           (map #(assoc % :type :dm))
+                           (map ->ChatInfo))))
         (dissoc :unread))))
 
 (defn list-dms [ctx iframe]
@@ -258,8 +262,14 @@
 (defn update-or-insert
   "Update a cache entry or insert a new one.
   The :seen field from the old entry, if present, is retained, so we don't forget about read status every time we refresh the cache."
+  ; TODO: if a chat is marked unread it'll be returned with seen=0, but the old seen sticks, and for some reason the timestamp
+  ; doesn't always update?
   [chat chat']
-  (merge chat' (select-keys chat [:seen])))
+  (if (not= chat chat')
+    (do
+      (log/trace "Cache update:" (:name chat') "->" chat')
+      (merge chat' (select-keys chat [:seen])))
+    chat))
 
 (defn rebuild-cache
   "Rebuild the channel cache.
@@ -269,7 +279,6 @@
   [cache ctx]
   (reduce
     (fn [cache chat]
-      (log/trace "Cache update:" (:name chat) "->" chat)
       (update cache (:name chat) update-or-insert chat))
     cache
     (list-all ctx)))
@@ -286,6 +295,7 @@
 
 (defn clear-unread
   [cache channel]
+  (println "Clear unread marker on" channel)
   (swap! cache
          (fn [cache]
            (assoc-in cache [channel :seen]
@@ -352,6 +362,9 @@
       (listUsers [this]
         (filter #(= :dm (:type %))
           (read-cache cache @ctx)))
+      ; TODO: there's an issue here where reading the contents of a channel
+      ; doesn't always list it as unread *in hangouts*, so polling keeps returning
+      ; it as unread even though readNewMessages() returns nothing.
       (listUnread [this]
         (->> (read-cache cache @ctx)
              (filter #(not= (:seen %1) (:timestamp %1)))
@@ -398,7 +411,9 @@
         (when-let [chat (read-cache cache @ctx channel)]
           (select-chat @ctx (:id chat))
           (let [seen (:seen chat)]
+            (println "pre-clear-unread" (@cache channel))
             (clear-unread cache channel)
+            (println "post-clear-unread" (@cache channel))
             (post-process chat @me (read-messages-since @ctx seen)))))
       (writeMessage [this channel message]
         ; TODO handle translation from IRC formatting codes to Hangouts markdownish codes

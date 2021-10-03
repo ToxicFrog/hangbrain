@@ -2,9 +2,8 @@
   "Channel-management commands for the ircd interface."
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
-    [hangbrain.zeiat.ircd.core :as ircd :refer [message *state* numeric reply-from privmsg]]
-    [hangbrain.zeiat.translator :as translator]
-    [hangbrain.zeiat.types :refer [TranslatorState]]
+    [hangbrain.zeiat.ircd.core :as ircd :refer [message *state* numeric]]
+    [hangbrain.zeiat.backend :as backend]
     [taoensso.timbre :as log]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [clojure.string :as string]
@@ -22,7 +21,7 @@
   [_ & _filter]
   ; TODO: implement filter support
   (numeric 321 "Channel" "Users Name")
-  (as-> (.listChannels (:backend *state*)) $
+  (as-> (backend/list-channels (:backend *state*)) $
         (run! rpl-list $))
   (numeric 323 "End of LIST"))
 
@@ -31,10 +30,9 @@
   (numeric 352 "*" name host "Zeiat" user "H@" (str "0 " realname)))
 
 (defmethod message :WHO
-  [_ _filter]
+  ([_ & _filters]
   ; TODO implement filter support -- many clients will send a WHO <channel> as soon
   ; as a channel is successfully joined, so this is actually important.
-  (as-> (.listUsers (:backend *state*)) $
+  (as-> (backend/list-users (:backend *state*)) $
         (run! rpl-who $))
-  (numeric 315 "End of WHO"))
-
+  (numeric 315 "End of WHO")))

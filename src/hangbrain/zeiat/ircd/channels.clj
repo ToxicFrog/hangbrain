@@ -2,9 +2,8 @@
   "Channel-management commands for the ircd interface."
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
-    [hangbrain.zeiat.ircd.core :as ircd :refer [message *state* numeric reply-from privmsg]]
-    [hangbrain.zeiat.translator :as translator]
-    [hangbrain.zeiat.types :refer [TranslatorState]]
+    [hangbrain.zeiat.ircd.core :as ircd :refer [message *state* numeric reply-from]]
+    [hangbrain.zeiat.backend :as backend]
     [taoensso.timbre :as log]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [clojure.string :as string]
@@ -55,7 +54,7 @@
   - 332 (topic)
   - 353/366 (names)"
   [joined channel]
-  (let [info (.statChannel (:backend *state*) channel)]
+  (let [info (backend/stat-channel (:backend *state*) channel)]
     (cond
       (nil? info)
       (do
@@ -89,7 +88,7 @@
 (defmethod message :NAMES
   [_ channel]
   ; todo factor out common parts with join-channel
-  (let [info (.statChannel (:backend *state*) channel)]
+  (let [info (backend/stat-channel (:backend *state*) channel)]
     (cond
       (nil? info) (numeric 403 "No such channel")
       (= :dm (:type info)) (numeric 403 "Not a channel")

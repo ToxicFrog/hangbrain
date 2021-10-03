@@ -3,6 +3,7 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [hangbrain.zeiat.types :refer [TranslatorState]]
+    [hangbrain.zeiat.backend :as backend]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [hangbrain.zeiat.ircd.core :refer [*state* privmsg]]
     [taoensso.timbre :as log]
@@ -25,10 +26,10 @@
     (do
       (log/trace "polling for new messages...")
       (binding [*state* state]
-        (->> (.listUnread (:backend state))
+        (->> (backend/list-unread (:backend state))
              (filter (partial interesting? state))
              (map :name)
-             (mapcat #(.readNewMessages backend %))
+             (mapcat (partial backend/read-new-messages backend))
              (filter #(not (= :me (:from %))))
              (run! privmsg)))
       (future
@@ -39,7 +40,7 @@
 (defn connect! :- TranslatorState
   "Called when user registration completes successfully. Should connect to the backend."
   [state :- TranslatorState]
-  (.connect (:backend state))
+  (backend/connect (:backend state))
   (poll state))
 
 (defn shutdown! :- TranslatorState
@@ -50,5 +51,5 @@
    (when (not (.isClosed socket))
      (.println writer (str ":Zeiat ERROR :" reason))
      (.close socket))
-   (.disconnect backend)
+   (backend/disconnect backend)
   state))
