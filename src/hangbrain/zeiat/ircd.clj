@@ -1,5 +1,5 @@
 (ns hangbrain.zeiat.ircd
-  "Proxy module that loads all the modules making up the IRCD engine and exports the 'dispatch-message function to send events to it."
+  "Proxy module that loads all the modules making up the IRCD engine and exports the 'dispatch-message function to send events to it. It also includes some functions for parsing IRC traffic."
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [hangbrain.zeiat.ircd.core :as ircd-core]

@@ -36,14 +36,6 @@
       (concat [":Zeiat" (format "%03d" num) (:name *state* "*")] fields)))
   *state*)
 
-(defn join-channel
-  [channel]
-  *state*)
-
-(defn part-channel
-  [channel]
-  *state*)
-
 (defmulti message
   (fn [command & _rest]
     (-> command string/upper-case keyword)))

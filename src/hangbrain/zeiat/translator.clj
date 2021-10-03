@@ -3,7 +3,7 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [hangbrain.zeiat.types :refer [TranslatorState]]
-    [hangbrain.zeiat.backend :as backend]
+    [hangbrain.zeiat.backend :as backend :refer [AnyName]]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [hangbrain.zeiat.ircd.core :refer [*state* privmsg]]
     [taoensso.timbre :as log]
@@ -14,10 +14,32 @@
   [state :- TranslatorState]
   state)
 
+(defn fetch-new-messages :- TranslatorState
+  [state :- TranslatorState, chats :- [AnyName]]
+  (reduce
+    (fn [state chat]
+      (log/trace "fetch-new-messages" chat)
+      (let [last-seen (get-in state [:last-seen chat])
+            messages (backend/read-messages-since (:backend state) chat last-seen)]
+        (run! privmsg (filter #(not= :me (:from %)) messages))
+        (assoc-in state [:last-seen chat] (:timestamp (last messages)))))
+    state chats))
+
 (defn- interesting?
-  [state chat]
-  (or (= (:type chat) :dm)
-    (contains? (:channels state) (:name chat))))
+  [{:keys [channels] :as _state} {:keys [type name] :as _chat}]
+  (or (= type :dm)
+    (contains? channels name)))
+
+(defn- unread?
+  [{:keys [last-seen] :as _state} {:keys [name status] :as chat}]
+  (cond
+    ; If we do not have a cache entry, or if the backend doesn't have a :last-seen field,
+    ; consider the :status field authoritative
+    (not (contains? last-seen name)) (= :unread status)
+    (nil? (:last-seen chat)) (= :unread status)
+    ; If it does have a :last-seen field, compare it with the cache entry
+    :else (not= (last-seen name) (:last-seen chat))
+    ))
 
 (defn- poll
   [{:keys [backend socket] :as state}]
@@ -26,12 +48,11 @@
     (do
       (log/trace "polling for new messages...")
       (binding [*state* state]
-        (->> (backend/list-unread (:backend state))
+        (->> (backend/list-chat-status (:backend state))
              (filter (partial interesting? state))
+             (filter (partial unread? state))
              (map :name)
-             (mapcat (partial backend/read-new-messages backend))
-             (filter #(not (= :me (:from %))))
-             (run! privmsg)))
+             (send *agent* fetch-new-messages)))
       (future
         (Thread/sleep 5000)
         (send *agent* poll))

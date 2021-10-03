@@ -32,12 +32,12 @@
    ; NICK/USER information -- used when generating PRIVMSG/JOIN events. Set once
    ; on connection and then fixed in place.
    ; TODO: move this to a backend/User struct so it can be directly compared
-   :name (s/maybe s/Str)
-   :user (s/maybe s/Str)
+   :name (s/maybe backend/UserName)
+   :user (s/maybe backend/UserName)
    :realname (s/maybe s/Str)
    ; Set of joined channels. The output of listUnread() will be intersected with this
    ; to determine which channels the client should get messages from.
-   :channels #{s/Str}
+   :channels #{backend/ChannelName}
    ; Negotiated capabilities. Not implemented yet.
    ; Goal is to support:
    ; - message-tags (required for other caps)
@@ -46,6 +46,7 @@
    ; - batch (for BATCH CHATHISTORY message)
    ; - msgid tag (needed for edits/reactji)
    ;:cap #{s/Str}
+   :last-seen {backend/AnyName s/Str}
    })
 
 (defschema TranslatorAgent

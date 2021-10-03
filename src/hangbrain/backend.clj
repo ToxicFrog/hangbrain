@@ -217,6 +217,7 @@
   ")
 
 (defn ->ChatInfo [info]
+  ; if we're generating the info for a channel this doesn't set up :users right
   (let [info (update info :type keyword)
         seen (if (:unread info) "0" (:timestamp info))
         name (case (:type info)
@@ -228,7 +229,7 @@
           (fn [users] (->> users
                            (map #(assoc % :type :dm))
                            (map ->ChatInfo))))
-        (dissoc :unread))))
+        )))
 
 (defn list-dms [ctx iframe]
   (log/trace "Getting chats in iframe" iframe)
@@ -372,6 +373,13 @@
                     (log/info "Chat is unread:" chat)
                     chat))))
           ; (read-cache cache @ctx)))
+      (listChatStatus [this]
+        (->> (list-all @ctx)
+             (map (fn [{:keys [type name timestamp unread] :as chat}]
+                     {:status (if unread :unread :read)
+                      :last-seen timestamp
+                      :name name
+                      :type type}))))
       (statChannel [this channel]
         (read-cache cache @ctx channel))
       (listMembers [this channel]
@@ -415,6 +423,11 @@
             (clear-unread cache channel)
             (println "post-clear-unread" (@cache channel))
             (post-process chat @me (read-messages-since @ctx seen)))))
+      (readMessagesSince [this channel id]
+        (when-let [chat (read-cache cache @ctx channel)]
+          (select-chat @ctx (:id chat))
+          (clear-unread cache channel)
+          (post-process chat @me (read-messages-since @ctx id))))
       (writeMessage [this channel message]
         ; TODO handle translation from IRC formatting codes to Hangouts markdownish codes
         ; https://support.google.com/chat/answer/7649118?hl=en

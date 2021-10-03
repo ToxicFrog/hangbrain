@@ -80,6 +80,15 @@
    s/Any s/Any
    })
 
+(defschema ChatStatus
+  "Status information for a chat (a channel or DM).
+  The :status field should always be present and be :read if the backend knows *definitively* that there are no pending messages in that chat, and :unread if it knows *or suspects* that there may be unread messages.
+  The :last-seen field is optional, but should be included whenever possible; it should be the ID of the most recently seen message, and will be matched up with IDs returned by readMessages and readMessagesSince."
+  {:name AnyName
+   :type (s/enum :dm :channel)
+   :status (s/enum :read :unread)
+   (s/optional-key :last-seen) s/Any})
+
 (defprotocol ZeiatBackend
   "A protocol that Zeiat uses to communicate with whatever backend you connect to it. Library users should supply something that implements this protocol to zeiat/run."
   (connect [this] ;- nil
@@ -95,12 +104,16 @@
     "List all available (DMable) users. Called in response to a user's WHO command.")
   (listUnread [this] ;- [Chat]
     "List all chats (users or channels) with unread messages. Called periodically to monitor for message traffic. Implementations can implement this however they want but note that just blindly returning all chats will result in a lot of unnecessary read-messages calls.")
+  (listChatStatus [this] ;- {AnyName ChatStatus}
+    "List status information for all chats; should return a map of chat IRC name to status. See the definition for ChatStatus for details on what should be included.")
   (statChannel [this channel] ;- Chat
     "Return information about a channel's users and read status.")
   (listMembers [this channel] ;- [User]
     "List all users in a given channel. See FIXME for the data shape. Called in response to NAMES or JOIN.")
   (readMessages [this channel] ;- [Message]
     "Return all messages from the given channel available in the backscroll. Implementors can limit this to only what's easily available if convenient (e.g. return only history that was autoloaded, not all history). Calling this should mark the chat as read.")
+  (readMessagesSince [this channel id] ;- [Message]
+    "Return all messages from the given channel after (not including) the message with the given ID.")
   (readNewMessages [this channel] ;- [Message]
     "As readMessages but should return only messages have not yet been read. Calling this should mark the chat as read.")
   (writeMessage [this channel message] ;- bool
@@ -133,6 +146,10 @@
   [this :- Backend]
   (.listUnread this))
 
+(defn list-chat-status :- [ChatStatus]
+  ([this :- Backend]
+   (.listChatStatus this)))
+
 (defn stat-channel :- Channel
   [this :- Backend, channel :- ChannelName]
   (.statChannel this channel))
@@ -140,6 +157,10 @@
 (defn read-messages :- [Message]
   [this :- Backend, channel :- AnyName]
   (.readMessages this channel))
+
+(defn read-messages-since :- [Message]
+  [this :- Backend, channel :- AnyName, id :- s/Any]
+  (.readMessagesSince this channel id))
 
 (defn read-new-messages :- [Message]
   [this :- Backend, channel :- AnyName]

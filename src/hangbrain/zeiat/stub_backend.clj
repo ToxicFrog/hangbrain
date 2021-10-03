@@ -23,6 +23,9 @@
     (listUnread [this]
       (log/trace "stub: listUnread" this)
       [])
+    (listChatStatus [this]
+      (log/trace "stub: listChatStatus" this)
+      [])
     (statChannel [this channel]
       (log/trace "stub: statChannel" this channel)
       {:name "#test" :users [] :count 0 :topic "test channel"})
@@ -31,6 +34,9 @@
       [])
     (readMessages [this channel]
       (log/trace "stub: readMessages" this channel)
+      [])
+    (readMessagesSince [this channel id]
+      (log/trace "stub: readMessages" this channel id)
       [])
     (readNewMessages [this channel]
       (log/trace "stub: readNewMessages" this channel)
