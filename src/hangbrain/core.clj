@@ -12,8 +12,7 @@
     [clojure.tools.cli :as cli]
     [clojure.string :as string]
     [hangbrain.backend :as backend]
-    [hangbrain.zeiat :as zeiat]
-    [hangbrain.zeiat.stub-backend :as stub]
+    [zeiat.core :as zeiat]
     ))
 
 (io.aviso.repl/install-pretty-exceptions)

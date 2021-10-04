@@ -8,11 +8,8 @@
     [etaoin.keys :as keys]
     [taoensso.timbre :as log]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
-    [clojure.tools.cli :as cli]
     [clojure.string :as string]
-    [hangbrain.zeiat :as zeiat]
-    ; [hangbrain.zeiat.types :refer [ZeiatBackend]]
-    [hangbrain.zeiat.backend :refer [Channel ZeiatBackend]]
+    [zeiat.backend :refer [ZeiatBackend]]
     ))
 
 (defmacro with-frame-el

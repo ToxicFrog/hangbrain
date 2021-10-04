@@ -4,12 +4,13 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :global-vars {*warn-on-reflection* false
                 *assert* true}
-  :dependencies [[org.clojure/clojure "1.10.0"]
-                 [prismatic/schema "1.1.12"]
+  :dependencies [[com.taoensso/timbre "5.1.2"]
+                 [etaoin "0.4.6"]
                  [expound "0.8.4"]
                  [io.aviso/pretty "1.1"]
-                 [com.taoensso/timbre "5.1.2"]
-                 [etaoin "0.4.6"]]
+                 [org.clojure/clojure "1.10.0"]
+                 [prismatic/schema "1.1.12"]
+                 [ca.ancilla/zeiat "0.1.0"]]
   :main ^:skip-aot hangbrain.core
   :target-path "target/%s"
   :middleware [io.aviso.lein-pretty/inject]
