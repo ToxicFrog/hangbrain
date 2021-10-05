@@ -9,8 +9,9 @@
     [taoensso.timbre :as log]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [clojure.string :as string]
-    [zeiat.backend :refer [ZeiatBackend]]
-    ))
+    [zeiat.backend :refer [ZeiatBackend]])
+  (:import
+    [org.apache.commons.text StringEscapeUtils]))
 
 (defmacro with-frame-el
   [ctx frame & body]
@@ -96,7 +97,7 @@
    [#"</?b>" "\u0002"]
    [#"</?i>" "\u001D"]
    [#"</?u>" "\u001F"]
-   [#"&nbsp;" " "]
+   [#"&[^;]+;" #(StringEscapeUtils/unescapeHtml4 %)]
    [#"<img [^>]+>" process-image]
    [#"<a [^>]+>.*?</a>" process-link]
    [#"</?span[^>]*>" ""]])
