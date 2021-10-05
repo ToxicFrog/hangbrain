@@ -85,5 +85,4 @@
   (let [opts (parse-opts argv)]
     (init-logging! (opts :log-level))
     (zeiat/run (opts :listen-port)
-               (backend/create opts))))
-               ;(stub/make-stub))))
+               (partial backend/create opts))))
