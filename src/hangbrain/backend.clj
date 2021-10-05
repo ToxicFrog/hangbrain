@@ -298,11 +298,14 @@
         ; we're logged in as
         me (atom nil)]
     (reify ZeiatBackend
-      (connect [this]
+      (connect [this _user]
         (log/info "Connecting to Google Chat...")
         (swap! ctx startup-browser (:browser opts) (:profile opts))
         (reset! me (get-logged-in-account @ctx))
-        (log/info "Connected."))
+        (log/info "Connected.")
+        (str "Connected to chat.google.com as '"
+          (:realname @me)
+          "' (" (:user @me) "@" (:host @me) ")"))
       (disconnect [this]
         (if @ctx
           (do
