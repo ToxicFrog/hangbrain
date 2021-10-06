@@ -92,8 +92,23 @@
       (not (empty? (string/trim text))) (str "<" href "> " text)
       :else (str "<" href "> "))))
 
-(def formatting
-  [[#"^<i>(.*)</i>$" "\u0001ACTION $1\u0001"]
+(def gchat->irc
+  "Formatting map for turning gchat messages into IRC ones. Mostly this means stripping/translating HTML tags."
+  ; TODO: Chat lacks proper CTCP ACTION support, so instead it just slaps the
+  ; user's firstname on the front of the message and wraps it in italics. This
+  ; means that if we just unwrap it it still has their first name prefixed to
+  ; the message payload and shows up as, e.g,
+  ;  * Zhu-Li Zhu does the thing.
+  ; rather than as
+  ;  * Zhu-Li does the thing
+  ; or as
+  ;  * Zhu does the thing
+  ; for now we handle this by dropping the first word of the message, which is
+  ; correct-ish and at least means that their name in the /me will still match
+  ; up with their name in other messages; that said, we might want to consider
+  ; adding an option that lets it just use firstname as display name, or something;
+  ; This is also an issue for outgoing CTCPs, which we don't support at all yet.
+  [[#"^<i>[^ ]+ (.*)</i>$" "\u0001ACTION $1\u0001"]
    [#"</?b>" "\u0002"]
    [#"</?i>" "\u001D"]
    [#"</?u>" "\u001F"]
@@ -124,7 +139,7 @@
             ; (fn [text [pattern replacement]] (string/replace text pattern replacement))
             (partial apply string/replace)
             (:html message)
-            formatting)))
+            gchat->irc)))
 
 (defn- read-messages
   [ctx]
@@ -143,13 +158,17 @@
   (->> (read-messages ctx)
        (drop-while #(<= (compare (:timestamp %) timestamp) 0))))
 
-(defn- irc-to-hangouts
+
+(def irc-to-gchat-formatting
+  "Formatting map for translating IRC formatting codes to gchat ones."
+  [["\u0002" "*"] ; bold
+   ["\u001D" "_"] ; italics
+   ["\u001F" ""] ; underline -- not supported :(
+   ])
+
+(defn- irc->gchat
   [msg]
-  ; TODO handle CTCP and formatting codes here
-  ; italics turn into _, bold into *
-  ; underline is not supported
-  ; CTCP ACTION should turn into italics, discard other CTCPs
-  msg)
+  (reduce (partial apply string/replace) msg irc-to-gchat-formatting))
 
 (defn send-message
   [ctx msg]
@@ -160,7 +179,7 @@
   (let [[frame div] (find-input-div ctx)]
     (log/trace "sending to" frame div)
     (with-frame-el ctx frame
-      (wd/fill-el ctx div msg keys/enter))))
+      (wd/fill-el ctx div (irc->gchat msg) keys/enter))))
 
 (def js-list-room-channels
   "
