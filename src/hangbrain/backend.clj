@@ -312,6 +312,7 @@
   v)
 
 (defn create :- (s/protocol ZeiatBackend)
+  ; TODO: we shouldn't permit multiple connections, like, at all.
   [opts]
   (let [ctx (atom nil) ; context for the webdriver
         ; A name/user/host/realname struct containing information about the user
@@ -352,9 +353,6 @@
              (filter #(= channel (:name %)))
              first
              (log-also "stat-channel")))
-      (listMembers [this channel]
-        (when-let [chat (.statChannel this channel)]
-          (:users chat)))
       (readMessages [this channel]
         ; TODO this needs some additional design work
         ; right now a returned message has a timestamp, author, and text
