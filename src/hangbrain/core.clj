@@ -66,7 +66,7 @@
   (let [{:keys [options _argv errors summary]} (cli/parse-opts argv flags)]
     (cond
       (:help options) (do
-                        (log/info summary)
+                        (println summary)
                         (System/exit 0))
       errors (do
                (binding [*out* *err*] (dorun (map #(log/error %) errors))
