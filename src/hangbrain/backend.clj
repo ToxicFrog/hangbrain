@@ -32,8 +32,7 @@
   (log/trace "selecting chat" id)
   (let [hash (str "chat/" id)]
     (when (not= hash (wd/get-hash ctx))
-      (wd/set-hash ctx (str "chat/" id))
-      )))
+      (wd/set-hash ctx (str "chat/" id)))))
 
 (defn find-input-div
   [ctx]
@@ -149,6 +148,7 @@
     {:timeout 10 :message "Couldn't find input div after 10 seconds"})
   (let [iframe (first (find-input-div ctx))]
     (with-frame-el ctx iframe
+      (wd/scroll-bottom ctx)
       (->> (wd/js-execute ctx js-read-messages)
            (map ->IRCMessage)))))
 
