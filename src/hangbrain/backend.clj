@@ -57,14 +57,10 @@
     };
   };
   let toMessage = elem => {
-    // TODO this is pretty gross when dealing with links/embeds -- do something better
-    let html =
-      elem.querySelector('div[jsaction^=mouseenter] div[jsaction]').innerHTML
-      || elem.querySelector('div[jsaction^=mouseenter] a').href
-      || 'ERROR: unable to process message';
-    if (html == '') {
-      html = elem.querySelector()
-    }
+    let message_el = elem.querySelector('div[jsaction^=mouseenter][jslog*=impression] div[jscontroller]');
+    let embed = elem.querySelector('div[jsaction^=mouseenter] div[soy-server-key] a')?.outerHTML;
+    let text = message_el?.innerText || '';
+    let html = embed || message_el?.innerHTML || '--ERROR message content missing--';
     return {
      author: toUser(elem.querySelector('span[data-member-id]')),
      timestamp: elem.querySelector('span[data-absolute-timestamp]').dataset.absoluteTimestamp.split('.')[0],
@@ -82,14 +78,11 @@
 
 (defn process-link
   [a]
-  (let [href (second (re-find #"href=\"([^\"]+)\"" a))
-        text (string/replace a #"</?a[^>]*>" "")]
-    (cond
-      (or (= text href)
-          (= text (string/replace href #"^https?://" "")))
-      text
-      (not (empty? (string/trim text))) (str "<" href "> " text)
-      :else (str "<" href "> "))))
+  (let [attachment (re-find #"https://chat.google.com/api/get_hangouts_attachment_url\?[^\"]*url_type=[^\"]+" a)
+        href (second (re-find #"href=\"([^\"]+)\"" a))]
+    ; we don't care about the text because gchat doesn't let you send a link with text that differs
+    ; from the link target
+    (or attachment href)))
 
 (def gchat->irc
   "Formatting map for turning gchat messages into IRC ones. Mostly this means stripping/translating HTML tags."
@@ -111,9 +104,9 @@
    [#"</?b>" "\u0002"]
    [#"</?i>" "\u001D"]
    [#"</?u>" "\u001F"]
-   [#"&[^;]+;" #(StringEscapeUtils/unescapeHtml4 %)]
-   [#"<img [^>]+>" process-image]
    [#"<a [^>]+>.*?</a>" process-link]
+   [#"<img [^>]+>" process-image]
+   [#"&[^;]+;" #(StringEscapeUtils/unescapeHtml4 %)]
    [#"</?span[^>]*>" ""]])
 
 (defn ->IRCNick
@@ -154,6 +147,7 @@
 
 (defn- read-messages-since
   [ctx timestamp]
+  ; TODO if the timestamp is not found we should return everything, not nothing
   (log/trace "timestamp" timestamp (type timestamp))
   (->> (read-messages ctx)
        (drop-while #(<= (compare (:timestamp %) timestamp) 0))))
