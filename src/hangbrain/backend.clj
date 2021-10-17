@@ -11,6 +11,7 @@
     [clojure.string :as string]
     [zeiat.backend :refer [ZeiatBackend]])
   (:import
+    [java.time Instant]
     [org.apache.commons.text StringEscapeUtils]))
 
 (defmacro with-frame-el
@@ -123,10 +124,16 @@
       (string/replace $ #"[ ,]+", "-")
       (str "#" $)))
 
+(defn millis->datetime
+  [ms]
+  (log/trace "millis->datetime" ms)
+  (.toString (Instant/ofEpochMilli (Long/parseLong ms))))
+
 (defn- ->IRCMessage
   [message]
   (assoc message
     :author (assoc (:author message) :name (->IRCNick (get-in message [:author :realname])))
+    :timestamp (millis->datetime (:timestamp message))
     :text (reduce
             ; (fn [text [pattern replacement]] (string/replace text pattern replacement))
             (partial apply string/replace)
@@ -230,12 +237,13 @@
 (defn ->ChatInfo [info]
   ; if we're generating the info for a channel this doesn't set up :users right
   (let [info (update info :type keyword)
-        seen (if (:unread info) "0" (:timestamp info))
+        ts (when (:timestamp info) (millis->datetime (:timestamp info)))
+        seen (if (:unread info) "0" ts)
         name (case (:type info)
                :dm (->IRCNick (:realname info))
                :channel (->IRCChannel (:topic info)))]
     (-> info
-        (assoc :seen seen :name name)
+        (assoc :seen seen :name name :timestamp ts)
         (update :users
           (fn [users] (->> users
                            (map #(assoc % :type :dm))
