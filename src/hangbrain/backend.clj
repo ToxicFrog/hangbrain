@@ -356,20 +356,6 @@
              first
              (log-also "stat-channel")))
       (readMessages [this channel]
-        ; TODO this needs some additional design work
-        ; right now a returned message has a timestamp, author, and text
-        ; I think we additionally need :to and :from, which are IRC nicks
-        ; in the case of DMs, every message is either :to or :from the DM target,
-        ; with the other field being the logged in user
-        ; in the case of channels, every message is :to the channel and :from the author
-        ; in both cases, if one of these fields is the logged in user, it should be
-        ; remapped to the IRC user so that they see the messages as coming from themself
-        ; rather than from whatever name they use in googlechat
-        ; this is critical for DMs (as otherwise the client may just discard them as malformed)
-        ; and good UX for channels
-        ; it is also possible that we might extend the (connect) protocol to allow the connector
-        ; to enforce a nick on the user, in which case the server can change their nick as
-        ; soon as they connect to match the logged in nick...something to think about.
         (log/trace "Reading messages from" channel)
         (when-let [chat (.statChannel this channel)]
           (select-chat @ctx (:id chat))
@@ -378,9 +364,9 @@
         (when-let [chat (.statChannel this channel)]
           (select-chat @ctx (:id chat))
           (post-process chat @me (read-messages-since @ctx id))))
+      (writeAction [this channel action]
+        (.writeMessage this channel (str "*" action "*")))
       (writeMessage [this channel message]
-        ; TODO handle translation from IRC formatting codes to Hangouts markdownish codes
-        ; https://support.google.com/chat/answer/7649118?hl=en
         (log/trace "writeMessage" channel message)
         (when-let [chat (.statChannel this channel)]
           (log/trace "context from statChannel:" chat)
