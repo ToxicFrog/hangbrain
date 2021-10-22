@@ -274,6 +274,7 @@
   (doto (wd/chrome-headless {:args [(str "--user-data-dir=" profile)]
      :path-browser bin
      :locator "css selector"})
+    (wd/set-window-size 1920 2160)
     (wd/go "https://chat.google.com/")
     (wd/wait-exists "div#talk_roster" {:timeout 30 :interval 1})))
 
