@@ -126,7 +126,6 @@
 
 (defn millis->datetime
   [ms]
-  (log/trace "millis->datetime" ms)
   (.toString (Instant/ofEpochMilli (Long/parseLong ms))))
 
 (defn- ->IRCMessage
@@ -238,12 +237,11 @@
   ; if we're generating the info for a channel this doesn't set up :users right
   (let [info (update info :type keyword)
         ts (when (:timestamp info) (millis->datetime (:timestamp info)))
-        seen (if (:unread info) "0" ts)
         name (case (:type info)
                :dm (->IRCNick (:realname info))
                :channel (->IRCChannel (:topic info)))]
     (-> info
-        (assoc :seen seen :name name :timestamp ts)
+        (assoc :name name :timestamp ts)
         (update :users
           (fn [users] (->> users
                            (map #(assoc % :type :dm))
@@ -346,6 +344,7 @@
       (listChatStatus [this]
         (->> (list-all @ctx)
              (map (fn [{:keys [type name timestamp unread] :as chat}]
+                    ; (log/trace "listChatStatus" chat)
                      {:status (if unread :unread :read)
                       :last-seen timestamp
                       :name name
