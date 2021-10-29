@@ -60,10 +60,10 @@
   let toMessage = elem => {
     let message_el = elem.querySelector('div[jsaction^=mouseenter][jslog*=impression] div[jscontroller]');
     //let embed = elem.querySelector('div[jsaction^=mouseenter] div[soy-server-key] a')?.outerHTML;
-    let image = elem.querySelector('a span img')?.src;
-    let text = message_el?.innerText || '';
     //let html = embed || message_el?.innerHTML || '--ERROR message content missing--';
-    let html = image || message_el?.innerHTML;
+    let image = elem.querySelector('a span img')?.src || '';
+    let text = message_el?.innerHTML || '';
+    let html = text + (text && image ? '\\n' : '') + image;
     return {
      author: toUser(elem.querySelector('span[data-member-id]')),
      timestamp: elem.querySelector('span[data-absolute-timestamp]').dataset.absoluteTimestamp.split('.')[0],
