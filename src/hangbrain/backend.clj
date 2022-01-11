@@ -290,10 +290,10 @@
       (list-dms ctx dm-iframe)
       )))
 
-(defn- startup-browser [ctx bin profile]
+(defn- startup-browser [ctx {:keys [browser profile debug]}]
   (assert (nil? ctx) "Attempt to startup browser when it's already running!")
-  (doto (wd/chrome-headless {:args [(str "--user-data-dir=" profile)]
-     :path-browser bin
+  (doto ((if debug wd/chrome wd/chrome-headless) {:args [(str "--user-data-dir=" profile)]
+     :path-browser browser
      :locator "css selector"})
     (wd/set-window-size 1920 2160)
     (wd/go "https://chat.google.com/")
@@ -334,7 +334,6 @@
   v)
 
 (defn create :- (s/protocol ZeiatBackend)
-  ; TODO: we shouldn't permit multiple connections, like, at all.
   [opts _reply_fn]
   (let [ctx (atom nil) ; context for the webdriver
         ; A name/user/host/realname struct containing information about the user
@@ -343,7 +342,7 @@
     (reify ZeiatBackend
       (connect [this _user]
         (log/info "Connecting to Google Chat...")
-        (swap! ctx startup-browser (:browser opts) (:profile opts))
+        (swap! ctx startup-browser opts)
         (reset! me (get-logged-in-account @ctx))
         (log/info "Connected.")
         (str "Connected to chat.google.com as '"
