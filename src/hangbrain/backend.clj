@@ -250,11 +250,30 @@
                            (map ->ChatInfo))))
         )))
 
+(defn- add-id-to-name [chat]
+  (assoc chat :name
+    (str (:name chat)
+      "["
+      (-> chat :user (string/split #"@") first)
+      "]")))
+
+(defn- dedup-one-name [chats]
+  (cond
+    (= 1 (count chats)) chats
+    :else (map add-id-to-name chats)))
+
+(defn- deduplicate-chats [chats]
+  (->> chats
+       (group-by :name)
+       (vals)
+       (mapcat dedup-one-name)))
+
 (defn list-dms [ctx iframe]
   (log/trace "Getting chats in iframe" iframe)
   (with-frame-el ctx iframe
     (->> (wd/js-execute ctx js-list-user-channels)
          (map ->ChatInfo)
+         (deduplicate-chats)
          )))
 
 (defn list-rooms [ctx iframe]
