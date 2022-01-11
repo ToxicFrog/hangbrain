@@ -6,6 +6,7 @@
   :global-vars {*warn-on-reflection* false
                 *assert* true}
   :dependencies [[com.taoensso/timbre "5.1.2"]
+                 [dev.dirs/directories "26"]
                  [etaoin "0.4.6"]
                  [expound "0.8.4"]
                  [io.aviso/pretty "1.1"]

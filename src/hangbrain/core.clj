@@ -13,7 +13,9 @@
     [clojure.string :as string]
     [hangbrain.backend :as backend]
     [zeiat.core :as zeiat]
-    ))
+    )
+  (:import
+    [dev.dirs ProjectDirectories]))
 
 (io.aviso.repl/install-pretty-exceptions)
 (io.aviso.logging/install-pretty-logging)
@@ -56,7 +58,7 @@
      "Must be one of trace/debug/info/warn/error/fatal/report"]]
    ["-p" "--profile PROFILE_DIR"
     "Browser profile directory. Must already be signed in to Chat!"
-    :default (str (get (System/getenv) "HOME") "/.config/hangbrain")]
+    :default (.-configDir (ProjectDirectories/from "ca" "ancilla" "hangbrain"))]
    ["-b" "--browser BROWSER_PATH"
     "Path to Chrome or Chromium"
     :default "/usr/bin/chromium"]
