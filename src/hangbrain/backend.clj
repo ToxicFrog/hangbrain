@@ -316,7 +316,7 @@
 
 (defn create :- (s/protocol ZeiatBackend)
   ; TODO: we shouldn't permit multiple connections, like, at all.
-  [opts]
+  [opts _reply_fn]
   (let [ctx (atom nil) ; context for the webdriver
         ; A name/user/host/realname struct containing information about the user
         ; we're logged in as
