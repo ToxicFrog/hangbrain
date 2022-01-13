@@ -290,14 +290,28 @@
       (list-dms ctx dm-iframe)
       )))
 
-(defn- startup-browser [ctx {:keys [browser profile debug]}]
+(defn- startup-browser [ctx {:keys [browser listen-port debug]}]
   (assert (nil? ctx) "Attempt to startup browser when it's already running!")
-  (doto ((if debug wd/chrome wd/chrome-headless) {:args [(str "--user-data-dir=" profile)]
-     :path-browser browser
-     :locator "css selector"})
-    (wd/set-window-size 1920 2160)
-    (wd/go "https://chat.google.com/")
-    (wd/wait-exists "div#talk_roster" {:timeout 30 :interval 1})))
+  ; TODO we need to write the marionette.port preference to user.js in the profile directory
+  ; user_pref("marionette.port", XXXX)
+  ; how do we find the profile directory?
+  ; we can't rely on the dirs library, because it's in ~/.mozilla/firefox on linux,
+  ; which is not one of the standard locations.
+  (log/info "Starting browser with marionette port" (dec listen-port) "and profile ca.ancilla.hangbrain")
+  (doto ((if debug wd/firefox wd/firefox-headless)
+         {:args ["-P" "ca.ancilla.hangbrain"]
+          :args-driver ["--marionette-port" (dec listen-port)] ; "--log" "trace"
+          ; :log-stdout "/dev/tty"
+          ; :log-stderr "/dev/tty"
+          :size [1920 2160]
+          :url "https://chat.google.com/"
+          :path-browser browser
+          :locator "css selector"})
+    (wd/wait-exists "div#talk_roster" {:timeout 30 :interval 1})
+    ; We need to wait a bit, because all the chats load as "unread" and if we
+    ; start fetching chat status immediately, all the chats will appear as unread
+    ; and we will have a bad time.
+    (wd/wait 5)))
 
 (defn- post-process
   [chat me messages]
