@@ -2,6 +2,7 @@
   "Interface to the headless browser that runs Googlechat."
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
+    [clojure.java.io :as io]
     [etaoin.api :as wd]
     [io.aviso.repl]
     [io.aviso.logging]
@@ -41,37 +42,6 @@
         (map (fn [frame] (with-frame-el ctx frame
                         [frame (wd/query-all ctx "div[spellcheck]")])) $)
         (some (fn [[frame divs]] (when (not-empty divs) [frame (first divs)])) $)))
-
-(def js-read-messages
-  "Collect messages from the currently focused channel. Messages are returned in the order they appear on screen, and look like
-  {:author {:realname :user :host} :timestamp :html}
-  "
-  "
-  let map = (f,xs) => Array.prototype.map.call(xs, f);
-  let toUser = span => {
-    let name = span.dataset.name;
-    let [user,host] = span.dataset.hovercardId.split('@');
-    return {
-      realname: name,
-      user: user,
-      host: host,
-    };
-  };
-  let toMessage = elem => {
-    let message_el = elem.querySelector('div[jsaction^=mouseenter][jslog*=impression] div[jscontroller]');
-    //let embed = elem.querySelector('div[jsaction^=mouseenter] div[soy-server-key] a')?.outerHTML;
-    //let html = embed || message_el?.innerHTML || '--ERROR message content missing--';
-    let image = elem.querySelector('a span img')?.src || '';
-    let text = message_el?.innerHTML || '';
-    let html = text + (text && image ? '\\n' : '') + image;
-    return {
-     author: toUser(elem.querySelector('span[data-member-id]')),
-     timestamp: elem.querySelector('span[data-absolute-timestamp]').dataset.absoluteTimestamp.split('.')[0],
-     html: html
-    };
-  };
-  return map(toMessage, document.querySelectorAll('c-wiz[data-is-user-topic=true]'));
-  ")
 
 (defn process-image
   [img]
@@ -141,6 +111,9 @@
             (:html message)
             gchat->irc)))
 
+(def js-read-messages
+  (-> "read-messages.js" io/resource slurp))
+
 (defn- read-messages
   [ctx]
   ; TODO factor this out, maybe make find-input-div itself block
@@ -183,58 +156,6 @@
     (with-frame-el ctx frame
       (wd/fill-el ctx div (irc->gchat msg) keys/enter))))
 
-(def js-list-room-channels
-  "
-  let map = (f,xs) => Array.prototype.map.call(xs, f);
-  let toChat = span => {
-    return {
-      id: span.dataset.groupId,
-      timestamp: span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp.split('.')[0] || '0',
-      topic: span.querySelector('span[role=presentation][title]').title,
-      unread: span.innerText.includes('Unread'),
-      users: [],
-      count: 0,
-      type: 'channel'
-    };
-  };
-  return map(toChat, document.querySelectorAll('span[role=listitem]'));
-  ")
-
-(def js-list-user-channels
-  "JS code to read the chat list in the top navigation iframe. Conveniently, the chat entries in this iframe have information about the participants embedded in them.
-  This contains three different kinds of chats:
-  - DMs, which have one user present and should be represented as users;
-  - ad hoc channels, which have multiple users and a name derived from those of all the participants;
-  - and defunct channels, which have zero users and should be elided entirely.
-  "
-  "
-  let map = (f,xs) => Array.prototype.map.call(xs, f);
-  let toUser = span => {
-    let name = span.dataset.name;
-    let [user,host] = span.dataset.hovercardId.split('@');
-    return {
-      realname: name,
-      user: user,
-      host: host,
-    };
-  };
-  let toChat = span => {
-    let id = span.dataset.groupId;
-    let users = map(toUser, span.querySelectorAll('span[data-member-id]'));
-    let timestamp = span.querySelector('span[data-absolute-timestamp]')?.dataset.absoluteTimestamp.split('.')[0] || '0';
-    let unread = span.innerText.includes('Unread');
-    if (users.length > 1) {
-      let topic = span.querySelector('span[role=presentation][title]').title;
-      return { id: id, users: users, topic: topic, timestamp: timestamp, unread: unread, count: users.length, type: 'channel' };
-    } else if (users.length == 1) {
-      return Object.assign(users[0], { id: id, timestamp: timestamp, unread: unread, type: 'dm' });
-    } else {
-      return false;
-    }
-  };
-  return map(toChat, document.querySelectorAll('span[role=listitem]')).filter(x=>x);
-  ")
-
 (defn ->ChatInfo [info]
   ; if we're generating the info for a channel this doesn't set up :users right
   (let [info (update info :type keyword)
@@ -268,6 +189,9 @@
        (vals)
        (mapcat dedup-one-name)))
 
+(def js-list-user-channels
+  (-> "list-user-channels.js" io/resource slurp))
+
 (defn list-dms [ctx iframe]
   (log/trace "Getting chats in iframe" iframe)
   (with-frame-el ctx iframe
@@ -275,6 +199,9 @@
          (map ->ChatInfo)
          (deduplicate-chats)
          )))
+
+(def js-list-room-channels
+  (-> "list-room-channels.js" io/resource slurp))
 
 (defn list-rooms [ctx iframe]
   (log/trace "Getting rooms in iframe" iframe)
@@ -290,14 +217,12 @@
       (list-dms ctx dm-iframe)
       )))
 
-(defn- startup-browser [ctx {:keys [browser listen-port debug]}]
-  (assert (nil? ctx) "Attempt to startup browser when it's already running!")
+(defn- create-webdriver-context [{:keys [browser listen-port debug]}]
   ; TODO we need to write the marionette.port preference to user.js in the profile directory
   ; user_pref("marionette.port", XXXX)
   ; how do we find the profile directory?
   ; we can't rely on the dirs library, because it's in ~/.mozilla/firefox on linux,
   ; which is not one of the standard locations.
-  (log/info "Starting browser with marionette port" (dec listen-port) "and profile ca.ancilla.hangbrain")
   (doto ((if debug wd/firefox wd/firefox-headless)
          {:args ["-P" "ca.ancilla.hangbrain"]
           :args-driver ["--marionette-port" (dec listen-port)] ; "--log" "trace"
@@ -312,6 +237,11 @@
     ; start fetching chat status immediately, all the chats will appear as unread
     ; and we will have a bad time.
     (wd/wait 5)))
+
+(defn- startup-browser [ctx {:keys [listen-port] :as options}]
+  (assert (nil? ctx) "Attempt to startup browser when it's already running!")
+  (log/info "Starting browser with marionette port" (dec listen-port) "and profile ca.ancilla.hangbrain")
+  (create-webdriver-context options))
 
 (defn- post-process
   [chat me messages]
