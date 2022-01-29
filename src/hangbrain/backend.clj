@@ -3,31 +3,18 @@
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
     [clojure.java.io :as io]
+    [clojure.string :as string]
     [etaoin.api :as wd]
+    [etaoin.keys :as keys]
+    [hangbrain.channels :as channels]
+    [hangbrain.util :as util]
     [io.aviso.repl]
     [io.aviso.logging]
-    [etaoin.keys :as keys]
-    [taoensso.timbre :as log]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
-    [clojure.string :as string]
+    [taoensso.timbre :as log]
     [zeiat.backend :refer [ZeiatBackend]])
   (:import
-    [java.time Instant]
     [org.apache.commons.text StringEscapeUtils]))
-
-(defmacro with-frame-el
-  [ctx frame & body]
-  `(try
-     (wd/switch-frame* ~ctx (wd/el->ref ~frame))
-     ~@body
-     (finally (wd/switch-frame-parent ~ctx))))
-
-(defmacro with-frame-n
-  [ctx frame & body]
-  `(try
-     (wd/switch-frame* ~ctx ~frame)
-     ~@body
-     (finally (wd/switch-frame-parent ~ctx))))
 
 (defn select-chat
   [ctx id]
@@ -39,7 +26,7 @@
 (defn find-input-div
   [ctx]
   (as-> (wd/query-all ctx "iframe[title=\"Chat content\"]") $
-        (map (fn [frame] (with-frame-el ctx frame
+        (map (fn [frame] (util/with-frame-el ctx frame
                         [frame (wd/query-all ctx "div[spellcheck]")])) $)
         (some (fn [[frame divs]] (when (not-empty divs) [frame (first divs)])) $)))
 
@@ -82,29 +69,11 @@
    [#"&[^;]+;" #(StringEscapeUtils/unescapeHtml4 %)]
    [#"</?span[^>]*>" ""]])
 
-(defn ->IRCNick
-  [name]
-  (-> name
-      string/trim
-      (string/replace #"[ !@:]+", "-")))
-
-(defn ->IRCChannel
-  [name]
-  (as-> name $
-      (string/trim $)
-      (string/replace $ #", +", "+")
-      (string/replace $ #"[ ,]+", "-")
-      (str "#" $)))
-
-(defn millis->datetime
-  [ms]
-  (.toString (Instant/ofEpochMilli (Long/parseLong ms))))
-
 (defn- ->IRCMessage
   [message]
   (assoc message
-    :author (assoc (:author message) :name (->IRCNick (get-in message [:author :realname])))
-    :timestamp (millis->datetime (:timestamp message))
+    :author (assoc (:author message) :name (util/->IRCNick (get-in message [:author :realname])))
+    :timestamp (util/millis->datetime (:timestamp message))
     :text (reduce
             ; (fn [text [pattern replacement]] (string/replace text pattern replacement))
             (partial apply string/replace)
@@ -114,6 +83,9 @@
 (def js-read-messages
   (-> "read-messages.js" io/resource slurp))
 
+; TODO sometimes we get a message with "\n" in it back from firefox rather than
+; multiple lines of messages or a message with a real newline?????
+; search logs for "discovered this existed" for an example
 (defn- read-messages
   [ctx]
   ; TODO factor this out, maybe make find-input-div itself block
@@ -121,7 +93,7 @@
     (partial find-input-div ctx)
     {:timeout 10 :message "Couldn't find input div after 10 seconds"})
   (let [iframe (first (find-input-div ctx))]
-    (with-frame-el ctx iframe
+    (util/with-frame-el ctx iframe
       (wd/scroll-bottom ctx)
       (->> (wd/js-execute ctx js-read-messages)
            (map ->IRCMessage)))))
@@ -153,69 +125,8 @@
     {:timeout 10 :message "Couldn't find input div after 10 seconds"})
   (let [[frame div] (find-input-div ctx)]
     (log/trace "sending to" frame div)
-    (with-frame-el ctx frame
+    (util/with-frame-el ctx frame
       (wd/fill-el ctx div (irc->gchat msg) keys/enter))))
-
-(defn ->ChatInfo [info]
-  ; if we're generating the info for a channel this doesn't set up :users right
-  (let [info (update info :type keyword)
-        ts (when (:timestamp info) (millis->datetime (:timestamp info)))
-        name (case (:type info)
-               :dm (->IRCNick (:realname info))
-               :channel (->IRCChannel (:topic info)))]
-    (-> info
-        (assoc :name name :timestamp ts)
-        (update :users
-          (fn [users] (->> users
-                           (map #(assoc % :type :dm))
-                           (map ->ChatInfo))))
-        )))
-
-(defn- add-id-to-name [chat]
-  (assoc chat :name
-    (str (:name chat)
-      "["
-      (-> chat :user (string/split #"@") first)
-      "]")))
-
-(defn- dedup-one-name [chats]
-  (cond
-    (= 1 (count chats)) chats
-    :else (map add-id-to-name chats)))
-
-(defn- deduplicate-chats [chats]
-  (->> chats
-       (group-by :name)
-       (vals)
-       (mapcat dedup-one-name)))
-
-(def js-list-user-channels
-  (-> "list-user-channels.js" io/resource slurp))
-
-(defn list-dms [ctx iframe]
-  (log/trace "Getting chats in iframe" iframe)
-  (with-frame-el ctx iframe
-    (->> (wd/js-execute ctx js-list-user-channels)
-         (map ->ChatInfo)
-         (deduplicate-chats)
-         )))
-
-(def js-list-room-channels
-  (-> "list-room-channels.js" io/resource slurp))
-
-(defn list-rooms [ctx iframe]
-  (log/trace "Getting rooms in iframe" iframe)
-  (with-frame-el ctx iframe
-    (->> (wd/js-execute ctx js-list-room-channels)
-         (map ->ChatInfo)
-         )))
-
-(defn list-all [ctx]
-  (let [[dm-iframe channel-iframe] (wd/query-all ctx "div[role=navigation] iframe")]
-    (concat
-      (list-rooms ctx channel-iframe)
-      (list-dms ctx dm-iframe)
-      )))
 
 (defn- create-webdriver-context [{:keys [browser listen-port debug]}]
   ; TODO we need to write the marionette.port preference to user.js in the profile directory
@@ -267,7 +178,7 @@
         (wd/js-execute
           ctx "return document.querySelector('header[role=banner] a[aria-label*=Account]').getAttribute('aria-label')")
         [_ realname user host] (re-find #"Google Account: ([^\n]+)\n\(([^@]+)@(.*)\)" info)]
-    {:name (->IRCNick realname)
+    {:name (util/->IRCNick realname)
      :realname (string/trim realname)
      :user user
      :host host}))
@@ -302,12 +213,12 @@
           (log/info "Ignoring shutdown request, backend already shut down.")))
       (listChannels [this]
         (filter #(= :channel (:type %))
-          (list-all @ctx)))
+          (channels/list-all @ctx)))
       (listUsers [this]
         (filter #(= :dm (:type %))
-          (list-all @ctx)))
+          (channels/list-all @ctx)))
       (listChatStatus [this]
-        (->> (list-all @ctx)
+        (->> (channels/list-all @ctx)
              (map (fn [{:keys [type name timestamp unread] :as chat}]
                     ; (log/trace "listChatStatus" chat)
                      {:status (if unread :unread :read)
@@ -315,7 +226,7 @@
                       :name name
                       :type type}))))
       (statChannel [this channel]
-        (->> (list-all @ctx)
+        (->> (channels/list-all @ctx)
              (filter #(= channel (:name %)))
              first
              (log-also "stat-channel")))
