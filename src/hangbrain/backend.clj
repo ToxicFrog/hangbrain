@@ -83,9 +83,6 @@
 (def js-read-messages
   (-> "read-messages.js" io/resource slurp))
 
-; TODO sometimes we get a message with "\n" in it back from firefox rather than
-; multiple lines of messages or a message with a real newline?????
-; search logs for "discovered this existed" for an example
 (defn- read-messages
   [ctx]
   ; TODO factor this out, maybe make find-input-div itself block

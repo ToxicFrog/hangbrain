@@ -19,7 +19,7 @@ let toMessage = elem => {
   //let html = embed || message_el?.innerHTML || '--ERROR message content missing--';
   let image = elem.querySelector('a span img')?.src || '';
   let text = message_el?.innerHTML || '';
-  let html = text + (text && image ? '\\n' : '') + image;
+  let html = text + (text && image ? '\n' : '') + image;
   return {
    author: toUser(elem.querySelector('span[data-member-id]')),
    timestamp: elem.querySelector('span[data-absolute-timestamp]').dataset.absoluteTimestamp.split('.')[0],
