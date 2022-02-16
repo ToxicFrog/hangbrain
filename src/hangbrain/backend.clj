@@ -42,6 +42,11 @@
         href (second (re-find #"href=\"([^\"]+)\"" a))]
     ; we don't care about the text because gchat doesn't let you send a link with text that differs
     ; from the link target
+    ; TODO: the above is a lie, if you send a *video* the attachment URL is the preview image and the link URL
+    ; is the URL of the actual video, so we need to handle that properly
+    ; specifically we get an enclosing <a> that links to the video with type=STREAMING_URL, but it's a redirect
+    ; through www.google.com/url?<actual url here>
+    ; and then inside we get an image with src=preview image, with FIFE_URL
     (or attachment href)))
 
 (def gchat->irc
@@ -108,6 +113,8 @@
   [["\u0002" "*"] ; bold
    ["\u001D" "_"] ; italics
    ["\u001F" ""] ; underline -- not supported :(
+   ; if we do this to turn off emoji entirely we get an "element not reachable by keyboard" error
+   ; [":" (str ":" keys/arrow-right)]
    ])
 
 (defn- irc->gchat
@@ -123,7 +130,33 @@
   (let [[frame div] (find-input-div ctx)]
     (log/trace "sending to" frame div)
     (util/with-frame-el ctx frame
-      (wd/fill-el ctx div (irc->gchat msg) keys/enter))))
+      ; We append a space so that if the message ends with something hangouts
+      ; recognizes as an emoji sequence, we will dismiss the emoji selector (and
+      ; insert the emoji) before pressing enter. Otherwise enter confirms the
+      ; emoji and the message is left in the input buffer.
+      (doto ctx
+        (wd/fill-el div (irc->gchat msg))
+        ; This is added because, for some reason, if we just splice the space
+        ; directly into the message we're sending, it doesn't work :(
+        (wd/perform-actions
+          (-> (wd/make-key-input)
+              (wd/add-pause)
+              (wd/add-key-press keys/enter)
+              (wd/add-pause)
+              (wd/add-key-press keys/enter)))))))
+      ; (wd/fill-el ctx div (irc->gchat msg) keys/enter keys/enter))))
+      ; We could also append → which dismisses the emoji picker without inserting
+      ; the emoji, but at the moment this results in inconsistent behaviour where
+      ; emoji in the middle of the message are converted and emoji at the end are not.
+      ; To handle this properly, we need to have an option that replaces every :
+      ; in the message with (str ":" keys/arrow-right), which we can probably do
+      ; in irc-to-gchat-formatting above.
+      ; TODO: we need some way for the client to configure backend-specific
+      ; features, probably involving a special zeiat cap that lets it send
+      ; config messages that are passed through to the backend, and then the
+      ; client can tell us during registration or something whether it does or
+      ; does not want emoji.
+      ; (wd/fill-el ctx div (irc->gchat msg) keys/arrow-right keys/enter))))
 
 (defn- create-webdriver-context [{:keys [browser listen-port debug]}]
   ; TODO we need to write the marionette.port preference to user.js in the profile directory
