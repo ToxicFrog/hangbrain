@@ -10,10 +10,12 @@
     [hangbrain.util :as util]
     [io.aviso.repl]
     [io.aviso.logging]
+    [me.raynes.fs :as fs]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [taoensso.timbre :as log]
     [zeiat.backend :refer [ZeiatBackend]])
   (:import
+    [dev.dirs ProjectDirectories]
     [org.apache.commons.text StringEscapeUtils]))
 
 (defn select-chat
@@ -158,15 +160,11 @@
       ; does not want emoji.
       ; (wd/fill-el ctx div (irc->gchat msg) keys/arrow-right keys/enter))))
 
-(defn- create-webdriver-context [{:keys [browser listen-port debug]}]
-  ; TODO we need to write the marionette.port preference to user.js in the profile directory
-  ; user_pref("marionette.port", XXXX)
-  ; how do we find the profile directory?
-  ; we can't rely on the dirs library, because it's in ~/.mozilla/firefox on linux,
-  ; which is not one of the standard locations.
+(defn- create-webdriver-context [{:keys [browser debug profile]}]
+  ; TODO if profile dir doesn't exist, start FF and prompt user to do the thing
+  (assert (fs/exists? profile))
   (doto ((if debug wd/firefox wd/firefox-headless)
-         {:args ["-P" "ca.ancilla.hangbrain"]
-          :args-driver ["--marionette-port" (dec listen-port)] ; "--log" "trace"
+         {:args ["-profile" profile]
           ; :args-driver ["--log" "trace"]
           ; :log-stdout "/dev/tty"
           ; :log-stderr "/dev/tty"
