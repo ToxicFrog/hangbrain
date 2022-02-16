@@ -134,13 +134,15 @@
   (doto ((if debug wd/firefox wd/firefox-headless)
          {:args ["-P" "ca.ancilla.hangbrain"]
           :args-driver ["--marionette-port" (dec listen-port)] ; "--log" "trace"
+          ; :args-driver ["--log" "trace"]
           ; :log-stdout "/dev/tty"
           ; :log-stderr "/dev/tty"
           :size [1920 2160]
           :url "https://chat.google.com/"
           :path-browser browser
           :locator "css selector"})
-    (wd/wait-exists "div#talk_roster" {:timeout 30 :interval 1})
+    ; we used to look for div#talk-roster here but it no longer exists in recent builds
+    (wd/wait-exists "div[role=main]" {:timeout 30 :interval 1})
     ; We need to wait a bit, because all the chats load as "unread" and if we
     ; start fetching chat status immediately, all the chats will appear as unread
     ; and we will have a bad time.
