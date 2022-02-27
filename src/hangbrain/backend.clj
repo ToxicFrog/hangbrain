@@ -163,6 +163,8 @@
 (defn- create-webdriver-context [{:keys [browser debug profile]}]
   ; TODO if profile dir doesn't exist, start FF and prompt user to do the thing
   (assert (fs/exists? profile))
+  ; unclean shutdown can leave this lying around, in which case everything breaks
+  (fs/delete-if-exists (fs/path profile "MarionetteActivePort"))
   (doto ((if debug wd/firefox wd/firefox-headless)
          {:args ["-profile" profile]
           ; :args-driver ["--log" "trace"]
