@@ -5,7 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :global-vars {*warn-on-reflection* false
                 *assert* true}
-  :dependencies [[clj-commons/fs "1.6.307"]
+  :dependencies [[babashka/fs "0.1.2"]
                  [com.taoensso/timbre "5.1.2"]
                  [dev.dirs/directories "26"]
                  [etaoin "0.4.6"]

@@ -2,6 +2,7 @@
   "Interface to the headless browser that runs Googlechat."
   (:refer-clojure :exclude [def defn defmethod defrecord fn letfn])
   (:require
+    [babashka.fs :as fs]
     [clojure.java.io :as io]
     [clojure.string :as string]
     [etaoin.api :as wd]
@@ -10,7 +11,6 @@
     [hangbrain.util :as util]
     [io.aviso.repl]
     [io.aviso.logging]
-    [me.raynes.fs :as fs]
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [taoensso.timbre :as log]
     [zeiat.backend :refer [ZeiatBackend]])
@@ -23,7 +23,9 @@
   (log/trace "selecting chat" id)
   (let [hash (str "chat/" id)]
     (when (not= hash (wd/get-hash ctx))
-      (wd/set-hash ctx (str "chat/" id)))))
+      (wd/set-hash ctx (str "chat/" id))
+      ; experimental -- wait for context switch
+      (wd/wait ctx 2))))
 
 (defn find-input-div
   [ctx]
