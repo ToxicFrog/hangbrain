@@ -13,17 +13,26 @@ let toUser = span => {
   };
 };
 
+let getTextForImage = img => {
+  if (!img) {
+    return '';
+  }
+  return '' +
+    (img.alt ? '[' + img.alt + '] ' : '') +
+    (img.src ? img.src : '--image url missing--');
+}
+
 let toMessage = elem => {
   let message_el = elem.querySelector('div[jsaction^=mouseenter][jslog*=impression] div[jscontroller]');
   //let embed = elem.querySelector('div[jsaction^=mouseenter] div[soy-server-key] a')?.outerHTML;
   //let html = embed || message_el?.innerHTML || '--ERROR message content missing--';
-  let image = elem.querySelector('a span img')?.src || '';
+  let image = getTextForImage(elem.querySelector('div[aria-label^=Image] img'));
   let text = message_el?.innerHTML || '';
   let html = text + (text && image ? '\n' : '') + image;
   return {
    author: toUser(elem.querySelector('span[data-member-id]')),
    timestamp: elem.querySelector('span[data-absolute-timestamp]').dataset.absoluteTimestamp.split('.')[0],
-   html: html
+   html: html || '--ERROR: message content missing--'
   };
 };
 
