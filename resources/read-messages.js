@@ -13,20 +13,24 @@ let toUser = span => {
   };
 };
 
+let toImageUrl = url => {
+  return url.replaceAll('DOWNLOAD_URL', 'FIFE_URL').replaceAll('auto=true', 'sz=w1920');
+}
+
 let getTextForImage = img => {
   if (!img) {
     return '';
   }
   return '' +
-    (img.alt ? '[' + img.alt + '] ' : '') +
-    (img.src ? img.src : '--image url missing--');
+    (img.title ? '[' + img.title + '] ' : '') +
+    (img.href ? toImageUrl(img.href) : '--image url missing--');
 }
 
 let toMessage = elem => {
-  let message_el = elem.querySelector('div[jsaction^=mouseenter][jslog*=impression] div[jscontroller]');
+  let message_el = elem.querySelector('div[jsaction*=mouseenter][jslog*=impression] div[jscontroller]');
   //let embed = elem.querySelector('div[jsaction^=mouseenter] div[soy-server-key] a')?.outerHTML;
   //let html = embed || message_el?.innerHTML || '--ERROR message content missing--';
-  let image = getTextForImage(elem.querySelector('div[aria-label^=Image] img'));
+  let image = getTextForImage(elem.querySelector('a[aria-label*=Image]'));
   let text = message_el?.innerHTML || '';
   let html = text + (text && image ? '\n' : '') + image;
   return {
