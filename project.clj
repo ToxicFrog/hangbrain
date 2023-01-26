@@ -14,7 +14,7 @@
                  [org.apache.commons/commons-text "1.9"]
                  [org.clojure/clojure "1.10.0"]
                  [prismatic/schema "1.1.12"]
-                 [ca.ancilla/zeiat "0.2.0-SNAPSHOT"]]
+                 [ca.ancilla/zeiat "0.3.0-SNAPSHOT"]]
   :main ^:skip-aot hangbrain.core
   :target-path "target/%s"
   :middleware [io.aviso.lein-pretty/inject]

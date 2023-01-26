@@ -223,13 +223,13 @@
   v)
 
 (defn create :- (s/protocol ZeiatBackend)
-  [opts _reply_fn]
+  [opts _agent]
   (let [ctx (atom nil) ; context for the webdriver
         ; A name/user/host/realname struct containing information about the user
         ; we're logged in as
         me (atom nil)]
     (reify ZeiatBackend
-      (connect [this _user]
+      (connect [this _translator]
         (log/info "Connecting to Google Chat...")
         (swap! ctx startup-browser opts)
         (reset! me (get-logged-in-account @ctx))
