@@ -11,11 +11,11 @@
     [hangbrain.util :as util]
     [io.aviso.repl]
     [io.aviso.logging]
+    #_{:clj-kondo/ignore [:unused-referred-var]}
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [taoensso.timbre :as log]
     [zeiat.backend :refer [ZeiatBackend]])
   (:import
-    [dev.dirs ProjectDirectories]
     [org.apache.commons.text StringEscapeUtils]))
 
 (defn select-chat
@@ -229,7 +229,7 @@
         ; we're logged in as
         me (atom nil)]
     (reify ZeiatBackend
-      (connect [this _translator]
+      (connect [_this _translator]
         (log/info "Connecting to Google Chat...")
         (swap! ctx startup-browser opts)
         (reset! me (get-logged-in-account @ctx))
@@ -237,7 +237,7 @@
         (str "Connected to chat.google.com as '"
           (:realname @me)
           "' (" (:user @me) "@" (:host @me) ")"))
-      (disconnect [this]
+      (disconnect [_this]
         (if @ctx
           (do
             (log/info "Shutting down Google Chat connection...")
@@ -245,21 +245,21 @@
             (reset! ctx nil)
             (log/info "Shut down."))
           (log/info "Ignoring shutdown request, backend already shut down.")))
-      (listChannels [this]
+      (listChannels [_this]
         (filter #(= :channel (:type %))
           (channels/list-all @ctx)))
-      (listUsers [this]
+      (listUsers [_this]
         (filter #(= :dm (:type %))
           (channels/list-all @ctx)))
-      (listChatStatus [this]
+      (listChatStatus [_this]
         (->> (channels/list-all @ctx)
-             (map (fn [{:keys [type name timestamp unread] :as chat}]
+             (map (fn [{:keys [type name timestamp unread] :as _chat}]
                     ; (log/trace "listChatStatus" chat)
                      {:status (if unread :unread :read)
                       :last-seen timestamp
                       :name name
                       :type type}))))
-      (statChannel [this channel]
+      (statChannel [_this channel]
         (->> (channels/list-all @ctx)
              (filter #(= channel (:name %)))
              first
