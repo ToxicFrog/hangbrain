@@ -31,7 +31,7 @@
   [ctx]
   (as-> (wd/query-all ctx "iframe[title=\"Chat content\"]") $
         (map (fn [frame] (util/with-frame-el ctx frame
-                        [frame (wd/query-all ctx "div[spellcheck]")])) $)
+                          [frame (wd/query-all ctx "div[spellcheck]")])) $)
         (some (fn [[frame divs]] (when (not-empty divs) [frame (first divs)])) $)))
 
 (defn process-image
@@ -53,6 +53,13 @@
     ; and then inside we get an image with src=preview image, with FIFE_URL
     (or attachment href)))
 
+(defn process-multiline-code
+  [[_outer inner]]
+  (->> inner
+       string/split-lines
+       (map #(str "\u000302] " % "\u000399"))
+       (string/join "\n")))
+
 (def gchat->irc
   "Formatting map for turning gchat messages into IRC ones. Mostly this means stripping/translating HTML tags."
   ; TODO: Chat lacks proper CTCP ACTION support, so instead it just slaps the
@@ -67,8 +74,10 @@
   ; for now we handle this by dropping the first word of the message, which is
   ; correct-ish and at least means that their name in the /me will still match
   ; up with their name in other messages; that said, we might want to consider
-  ; adding an option that lets it just use firstname as display name, or something;
-  ; This is also an issue for outgoing CTCPs, which we don't support at all yet.
+  ; adding an option that lets it just use firstname as display name, or something.
+  ; Replacements are called with string/replace, so string replacements can use
+  ; $n to refer to the nth capture group, and function replacements get the whole
+  ; string in head position and the capture groups, if any, as the tail arguments.
   [[#"^<i>[^ ]+ (.*)</i>$" "\u0001ACTION $1\u0001"]
    [#"</?b>" "\u0002"]
    [#"</?i>" "\u001D"]
@@ -76,7 +85,10 @@
    [#"<a [^>]+>.*?</a>" process-link]
    [#"<img [^>]+>" process-image]
    [#"&[^;]+;" #(StringEscapeUtils/unescapeHtml4 %)]
-   [#"</?span[^>]*>" ""]])
+   [#"</?div[^>]*>" ""]
+   [#"</?span[^>]*>" ""]
+   [#"(?s)```(.*?)```" process-multiline-code]
+   [#"`([^`]+)`" "\u000302`$1`\u000399"]])
 
 (defn- ->IRCMessage
   [message]
@@ -116,10 +128,10 @@
   "Formatting map for translating IRC formatting codes to gchat ones."
   [["\u0002" "*"] ; bold
    ["\u001D" "_"] ; italics
-   ["\u001F" ""] ; underline -- not supported :(
+   ["\u001F" ""]]) ; underline -- not supported :(
    ; if we do this to turn off emoji entirely we get an "element not reachable by keyboard" error
    ; [":" (str ":" keys/arrow-right)]
-   ])
+
 
 (defn- irc->gchat
   [msg]
