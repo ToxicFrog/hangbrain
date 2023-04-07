@@ -195,9 +195,9 @@
     ; and we will have a bad time.
     (wd/wait 5)))
 
-(defn- startup-browser [ctx {:keys [listen-port] :as options}]
+(defn- startup-browser [ctx {:keys [listen-port profile] :as options}]
   (assert (nil? ctx) "Attempt to startup browser when it's already running!")
-  (log/info "Starting browser with marionette port" (dec listen-port) "and profile ca.ancilla.hangbrain")
+  (log/info "Starting browser with marionette port" (dec listen-port) "and profile" profile)
   (create-webdriver-context options))
 
 (defn- post-process
