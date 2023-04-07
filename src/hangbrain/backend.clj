@@ -123,7 +123,7 @@
   ; TODO if the timestamp is not found we should return everything, not nothing
   (log/trace "timestamp" timestamp (type timestamp))
   (->> (read-messages ctx)
-       (drop-while #(<= (compare (:timestamp %) timestamp) 0))))
+       (filter #(> (compare (:timestamp %) timestamp) 0))))
 
 
 (def irc-to-gchat-formatting
