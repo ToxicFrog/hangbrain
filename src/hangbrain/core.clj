@@ -60,8 +60,8 @@
     "Browser profile directory. Must already be signed in to Chat!"
     :default (.-configDir (ProjectDirectories/from "ca" "ancilla" "hangbrain"))]
    ["-b" "--browser BROWSER_PATH"
-    "Path to Chrome or Chromium"
-    :default "/usr/bin/chromium"]
+    "Path to Firefox"
+    :default "/usr/bin/firefox"]
    ["-D" "--debug" "Display the browser session rather than running it in headless mode; on exit, wait for the user to close the browser rather than exiting immediately."]
    ["-h" "--help" "This text"]])
 
