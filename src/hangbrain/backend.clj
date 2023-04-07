@@ -113,8 +113,10 @@
   (let [iframe (first (find-input-div ctx))]
     (util/with-frame-el ctx iframe
       (wd/scroll-bottom ctx)
-      (->> (wd/js-execute ctx js-read-messages)
-           (map ->IRCMessage)))))
+      (let [messages (->> (wd/js-execute ctx js-read-messages)
+                          (map ->IRCMessage))]
+        (log/trace "read-messages" messages)
+        messages))))
 
 (defn- read-messages-since
   [ctx timestamp]
