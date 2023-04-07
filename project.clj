@@ -12,7 +12,7 @@
                  [expound "0.8.4"]
                  [io.aviso/pretty "1.1"]
                  [org.apache.commons/commons-text "1.9"]
-                 [org.clojure/clojure "1.10.0"]
+                 [org.clojure/clojure "1.11.0"]
                  [prismatic/schema "1.1.12"]
                  [ca.ancilla/zeiat "0.3.0-SNAPSHOT"]]
   :main ^:skip-aot hangbrain.core
