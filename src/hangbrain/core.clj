@@ -8,12 +8,13 @@
     [io.aviso.repl]
     [io.aviso.logging]
     [taoensso.timbre :as log]
+    #_{:clj-kondo/ignore [:unused-referred-var]}
     [schema.core :as s :refer [def defn defmethod defrecord defschema fn letfn]]
     [clojure.tools.cli :as cli]
     [clojure.string :as string]
     [hangbrain.backend :as backend]
-    [zeiat.core :as zeiat]
-    )
+    [zeiat.core :as zeiat])
+
   (:import
     [dev.dirs ProjectDirectories]))
 
@@ -41,7 +42,7 @@
            @timestamp_ " "
            "[" (or ?ns-str ?file "?") ":" (or ?line "?") "] - "
            @msg_
-           (if ?err
+           (when ?err
              (str "\n" (log/stacktrace ?err))))))
      :timestamp-opts {:pattern "HH:mm:ss"}}))
 
@@ -71,11 +72,11 @@
       (:help options) (do
                         (println summary)
                         (System/exit 0))
-      errors (do
-               (binding [*out* *err*] (dorun (map #(log/error %) errors))
+      errors (binding [*out* *err*]
+               (dorun (map #(log/error % errors)))
                (log/trace summary)
-               (System/exit 1))))
-    options))
+               (System/exit 1))
+      :else options)))
 
 (log/trace "compiling main")
 (defn -main
@@ -88,4 +89,5 @@
   (let [opts (parse-opts argv)]
     (init-logging! (opts :log-level))
     (zeiat/run (opts :listen-port)
-               (partial backend/create opts))))
+               (partial backend/create opts)
+               {:cache-key "hangbrain"})))
